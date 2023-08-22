@@ -133,10 +133,11 @@ class DiffusionFramework:
             predicted_gt_image, metric_results = self.evaluate_one_batch(gt_image.to(self.device), cond_image.to(self.device), mask.to(self.device))
             # loop over all metrics, and add the result to the cumulative total
             for key in metric_results:
-                running_metric_results[key] += metric_results[key]
+                running_metric_results[key] += np.mean(metric_results[key])
+            break
         # create a new OrderedDict to store the mean metric results, by dividing through by the length of the dataloader
         mean_metric_results = OrderedDict(
-            (key, running_metric_results[key]/len(self.evaluation_dataloader)) for key in metric_results
+            (key, np.mean(running_metric_results[key])/len(self.evaluation_dataloader)) for key in metric_results
         )
         self.log_visuals('Evaluation', epoch_number, cond_image, predicted_gt_image, gt_image, mask)
         return mean_metric_results
