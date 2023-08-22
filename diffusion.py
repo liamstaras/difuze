@@ -198,7 +198,7 @@ class DiffusionFramework:
             writer(predicted_gt_image_out, self.image_base_path, name=name.format('Pred'))
             writer(gt_image_out, self.image_base_path, name=name.format('GT'))
 
-    def main_training_loop(self, log_every=10, eval_every=1):
+    def main_training_loop(self, log_every=100, eval_every=1):
         epoch_number = 1
         best_rms_metrics = None
         while True:

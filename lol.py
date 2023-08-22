@@ -38,7 +38,7 @@ model = PaletteModel(
 training_loss_function = torch.nn.L1Loss()
 optimizer = torch.optim.Adam(
     params=list(filter(lambda p: p.requires_grad, model.parameters())), 
-    lr=1e-6, 
+    lr=5e-6, 
     weight_decay=0
 )
 scheduler = torch.optim.lr_scheduler.ExponentialLR(
