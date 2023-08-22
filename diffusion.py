@@ -60,6 +60,7 @@ class DiffusionFramework:
         os.makedirs(self.image_base_path, exist_ok=True)
         os.makedirs(self.model_base_path, exist_ok=True)
 
+
     def train_single_epoch(self, epoch_number, log_every):
         # place the model into training mode
         self.model.train()
@@ -134,11 +135,11 @@ class DiffusionFramework:
             predicted_gt_image, metric_results = self.evaluate_one_batch(gt_image.to(self.device), cond_image.to(self.device), mask.to(self.device))
             # loop over all metrics, and add the result for each image in the batch to the list for this epoch
             for key in metric_results:
-                all_metric_results.extend(metric_results[key])
+                all_metric_results[key].extend(metric_results[key])
         # create a new OrderedDict to store the mean metric results, by dividing through by the length of the dataloader
         mean_metric_results = OrderedDict(
             # use nanmean to avoid polluting the mean with any stray NaNs
-            (key, np.nanmean(all_metric_results)) for key in metric_results
+            (key, np.nanmean(all_metric_results[key])) for key in metric_results
         )
         # log the FINAL visual from each batch
         self.log_visuals('Evaluation', epoch_number, cond_image[-1], predicted_gt_image[-1], gt_image[-1], mask[-1])
