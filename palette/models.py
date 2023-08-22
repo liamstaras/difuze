@@ -3,11 +3,12 @@ from diffusion import DiffusionModel
 import torch
 
 class PaletteModel(UNet, DiffusionModel):
-    def forward(self, cond_image, noisy_image, gamma):
+    def forward(self, cond_image: torch.Tensor, noisy_image: torch.Tensor, gamma: torch.Tensor):
         noise_prediction = super().forward(torch.cat([cond_image, noisy_image], dim=1), gamma)
         return noise_prediction
     
-    def refinement_step(self, predicted_gt_image_t, cond_image, alpha_t, gamma_t):
+    @torch.no_grad()
+    def refinement_step(self, predicted_gt_image_t: torch.Tensor, cond_image: torch.Tensor, alpha_t: torch.Tensor, gamma_t: torch.Tensor):
         ### use paper Saharia et al. directly
         ## prepare
         # use the denoise function (UNet) to predict the noise noise_prediction
