@@ -91,13 +91,12 @@ class DiffusionFramework:
                         mean_loss
                     )
                 )
+                # determine the global index for logging purposes
+                global_index = (epoch_number-1)*len(self.training_dataloader) + i
                 # write to tensorboard (if initialized)
-                global_index = epoch_number*len(self.training_dataloader) + i
                 self.log_scalar('train/Loss', mean_loss, global_index)
                 # zero the running counter
                 running_loss = 0.
-        # consult the scheduler for learning rate change
-        self.scheduler.step()
         # return the most recent loss
         return mean_loss
 
@@ -218,3 +217,5 @@ class DiffusionFramework:
                     self.write_log_line('Done. Resuming training.', also_print=True)
                     best_rms_metrics = rms_metrics
             epoch_number += 1
+            # consult the scheduler for learning rate change
+            self.scheduler.step()

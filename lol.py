@@ -30,12 +30,12 @@ model = PaletteModel(
 training_loss_function = torch.nn.L1Loss()
 optimizer = torch.optim.Adam(
     params=list(filter(lambda p: p.requires_grad, model.parameters())), 
-    lr=1e-5, 
+    lr=1e-6, 
     weight_decay=0
 )
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+scheduler = torch.optim.lr_scheduler.ExponentialLR(
     optimizer=optimizer,
-    factor=0.1
+    gamma=0.9
 )
 
 # make noise schedules
