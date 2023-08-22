@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from support import NoiseSchedule, NumpyMetric
+from metrics.support import Statistic
 from data import NpyDataset, NpySaver, TifSaver
 from metrics.cosmology import PixelCounts, PeakCounts, PowerSpectrum
 from metrics.metrics import RelativeDifference
@@ -8,10 +9,17 @@ from diffusion import DiffusionFramework
 from palette.models import PaletteModel
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
+from socket import gethostname
+import os
 import cmocean
 
 # determine whether we will use the GPU
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+# establish base path
+timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+base_path = os.path.join('runs', timestamp+'_'+gethostname())
 
 # create the model
 model = PaletteModel(
@@ -40,7 +48,7 @@ scheduler = torch.optim.lr_scheduler.ExponentialLR(
 
 # make noise schedules
 training_noise_schedule = NoiseSchedule(2000, 1e-6, 0.01, np.linspace)
-inference_noise_schedule = NoiseSchedule(1000, 1e-4, 0.09, np.linspace)
+inference_noise_schedule = NoiseSchedule(300, 1e-4, 0.09, np.linspace)
 
 # make datasets
 training_dataset = NpyDataset(
@@ -57,6 +65,7 @@ evaulation_dataset = NpyDataset(
 )
 
 # prepare evaluation metrics
+
 statistics = [
     PixelCounts(), PeakCounts(), PowerSpectrum()
 ]
@@ -72,13 +81,14 @@ training_dataloader = DataLoader(training_dataset, batch_size=32, shuffle=True)
 evaluation_dataloader = DataLoader(evaulation_dataset, batch_size=32, shuffle=False)
 
 # prepare tensorboard
-summary_writer = SummaryWriter()
+summary_writer = SummaryWriter(log_dir=os.path.join(base_path, 'tensorboard'))
 
 # make function for generating images
 def tensor_to_image_cmocean(tensor):
     normalized = torch.clamp(tensor, -4, 4)/4 # now in range (-1,1)
     image = cmocean.cm.deep_r(normalized.cpu().numpy())
-    return image
+    # roll axes and cut alpha channel
+    return image.transpose((2,0,1))[:3]
 
 # specify functions to save outputs
 save_functions = [
@@ -99,6 +109,7 @@ framework = DiffusionFramework(
     evaluation_dataloader=evaluation_dataloader,
     inference_noise_schedule=inference_noise_schedule,
     evaluation_metrics=evaluation_metrics,
+    base_path=base_path,
     summary_writer=summary_writer,
     save_functions=save_functions,
     visual_function=visual_function
