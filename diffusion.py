@@ -68,7 +68,7 @@ class DiffusionFramework:
         current_loss = 0.
         # loop over the training data, showing tqdm progress bar and tracking the index
         # use tqdm to show a progress bar, to which we can affix the current loss rate
-        pbar = tqdm.tqdm(self.training_dataloader, postfix='current loss: ------')
+        pbar = tqdm.tqdm(self.training_dataloader, postfix='current learning rate: --------, current loss: ------')
         # using zero indexing is annoying for mean calc, so start from 1
         for i, data in enumerate(pbar, start=1):
             # extract the images from the loaded data
@@ -76,7 +76,7 @@ class DiffusionFramework:
             # add the loss to the cumulative total
             current_loss = self.train_one_batch(gt_image.to(self.device), cond_image.to(self.device), mask.to(self.device))
             # display the current loss
-            pbar.set_postfix_str('current loss: {:.4f}'.format(float(current_loss)))
+            pbar.set_postfix_str('current learning rate: {:.2e}, current loss: {:.4f}'.format(float(self.optimizer.param_groups[-1]['lr']), float(current_loss)))
             running_loss += current_loss
             # check if we are at a logging iteration
             if i % log_every == 0:
