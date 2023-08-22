@@ -55,13 +55,14 @@ training_dataset = NpyDataset(
     'data/full-log-clean.npy',
     gt_index=1,
     cond_index=0,
-    stop_index=0.9
+    stop_index=0.89
 )
 evaulation_dataset = NpyDataset(
     'data/full-log-clean.npy',
     gt_index=1,
     cond_index=0,
-    start_index=0.9
+    start_index=0.89,
+    stop_index=0.90
 )
 
 # prepare evaluation metrics
