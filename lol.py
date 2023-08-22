@@ -30,7 +30,7 @@ model = PaletteModel(
 training_loss_function = torch.nn.L1Loss()
 optimizer = torch.optim.Adam(
     params=list(filter(lambda p: p.requires_grad, model.parameters())), 
-    lr=5e-6, 
+    lr=1e-5, 
     weight_decay=0
 )
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -44,13 +44,13 @@ inference_noise_schedule = NoiseSchedule(1000, 1e-4, 0.09, np.linspace)
 
 # make datasets
 training_dataset = NpyDataset(
-    '/home/liam/Documents/Code/Genève/Davide-data/full-log-clean.npy',
+    'data/full-log-clean.npy',
     gt_index=1,
     cond_index=0,
     stop_index=0.9
 )
 evaulation_dataset = NpyDataset(
-    '/home/liam/Documents/Code/Genève/Davide-data/full-log-clean.npy',
+    'data/full-log-clean.npy',
     gt_index=1,
     cond_index=0,
     start_index=0.9
@@ -68,8 +68,8 @@ evaluation_metrics = [
     ) for statistic in statistics]
 
 # make dataloaders
-training_dataloader = DataLoader(training_dataset, batch_size=4, shuffle=True)
-evaluation_dataloader = DataLoader(evaulation_dataset, batch_size=4, shuffle=False)
+training_dataloader = DataLoader(training_dataset, batch_size=32, shuffle=True)
+evaluation_dataloader = DataLoader(evaulation_dataset, batch_size=32, shuffle=False)
 
 # prepare tensorboard
 summary_writer = SummaryWriter()

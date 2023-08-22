@@ -21,7 +21,7 @@ class DiffusionFramework:
         device: str,
         model: DiffusionModel,
         optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.lr_scheduler.LRScheduler,
+        scheduler: torch.optim.lr_scheduler._LRScheduler,
         training_dataloader: DataLoader,
         training_noise_schedule: NoiseSchedule,
         training_loss_function: torch.nn.modules.loss._Loss,
@@ -57,6 +57,8 @@ class DiffusionFramework:
         else:
             self.log_path = log_path_override
         os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
+
+        self.image_base_path = 'output'
 
     def train_single_epoch(self, epoch_number, log_every):
         # place the model into training mode
@@ -216,4 +218,3 @@ class DiffusionFramework:
                     self.write_log_line('Done. Resuming training.', also_print=True)
                     best_rms_metrics = rms_metrics
             epoch_number += 1
-            
