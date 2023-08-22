@@ -134,7 +134,6 @@ class DiffusionFramework:
             # loop over all metrics, and add the result to the cumulative total
             for key in metric_results:
                 running_metric_results[key] += np.mean(metric_results[key])
-            break
         # create a new OrderedDict to store the mean metric results, by dividing through by the length of the dataloader
         mean_metric_results = OrderedDict(
             (key, np.mean(running_metric_results[key])/len(self.evaluation_dataloader)) for key in metric_results
