@@ -60,6 +60,8 @@ class DiffusionFramework:
 
         self.summary_writer = summary_writer
 
+        self.loss_function_name = self.training_loss_function.__class__.__name__
+
     def train_single_epoch(self, epoch_number, log_every):
         # place the model into training mode
         self.model.train()
@@ -94,7 +96,7 @@ class DiffusionFramework:
                 # determine the global index for logging purposes
                 global_index = (epoch_number-1)*len(self.training_dataloader) + i
                 # write to tensorboard (if initialized)
-                self.log_scalar('train/Loss', mean_loss, global_index)
+                self.log_scalar('train/'+self.loss_function_name, mean_loss, global_index)
                 # zero the running counter
                 running_loss = 0.
         # return the most recent loss
