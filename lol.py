@@ -85,7 +85,9 @@ summary_writer = SummaryWriter(log_dir=os.path.join(base_path, 'tensorboard'))
 
 # make function for generating images
 def tensor_to_image_cmocean(tensor):
-    normalized = torch.clamp(tensor, -4, 4)/4 # now in range (-1,1)
+    cmin = -2
+    cmax = 2
+    normalized = (torch.clamp(tensor, cmin, cmax)-cmin)/(cmax-cmin) # now in range (0,1)
     image = cmocean.cm.deep_r(normalized.cpu().numpy())
     # roll axes and cut alpha channel
     return image.transpose((2,0,1))[:3]
