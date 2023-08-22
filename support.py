@@ -18,20 +18,21 @@ class NoiseSchedule:
 
 class TorchMetric:
     def __init__(self, metric_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]):
-        self.metric = metric_fn
+        self.metric_fn = metric_fn
     def __call__(self, output: torch.Tensor, target: torch.Tensor) -> float:
-        return self.metric_fn(output, target)
+        return self.metric_fn(output.squeeze(), target.squeeze())
     @property
     def name(self):
-        return self.metric.name+'->'+self.__class__.__name__
+        return self.metric_fn.name+'->'+self.__class__.__name__
 
-@torch.no_grad()
 class NumpyMetric(TorchMetric):
     def __init__(self, metric_fn: Callable[[np.ndarray, np.ndarray], np.ndarray]):
-        self.metric = metric_fn
+        super().__init__(metric_fn=metric_fn)
+
+    @torch.no_grad()
     def __call__(self, output: torch.Tensor, target: torch.Tensor) -> float:
         return self.metric_fn(
-            output.detach().cpu().numpy(), 
-            target.detach().cpu().numpy()
+            output.detach().cpu().numpy().squeeze(), 
+            target.detach().cpu().numpy().squeeze()
         )
 
