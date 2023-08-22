@@ -43,7 +43,7 @@ optimizer = torch.optim.Adam(
 )
 scheduler = torch.optim.lr_scheduler.ExponentialLR(
     optimizer=optimizer,
-    gamma=0.9
+    gamma=0.5
 )
 
 # make noise schedules
@@ -55,13 +55,13 @@ training_dataset = NpyDataset(
     'data/full-log-clean.npy',
     gt_index=1,
     cond_index=0,
-    stop_index=0.89
+    stop_index=0.899
 )
 evaulation_dataset = NpyDataset(
     'data/full-log-clean.npy',
     gt_index=1,
     cond_index=0,
-    start_index=0.89,
+    start_index=0.899,
     stop_index=0.90
 )
 

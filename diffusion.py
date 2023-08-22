@@ -214,6 +214,9 @@ class DiffusionFramework:
                     mean_metric_results[metric_name]**2 for metric_name in mean_metric_results
                 )))
                 self.write_log_line('The RMS value is {:.4f}'.format(rms_metrics), also_print=True)
+                for metric_name in mean_metric_results:
+                    self.log_scalar('Evaluation/'+metric_name, mean_metric_results[metric_name], epoch_number)
+                self.log_scalar('Evaluation/All_Metrics_RMS', rms_metrics, epoch_number)
                 if best_rms_metrics is None: best_rms_metrics = rms_metrics
                 if rms_metrics <= best_rms_metrics:
                     self.write_log_line('This is the new best epoch!! Saving model...', also_print=True)
