@@ -28,10 +28,10 @@ class DiffusionFramework:
         evaluation_dataloader: DataLoader,
         inference_noise_schedule: NoiseSchedule,
         evaluation_metrics: list[TorchMetric],
+        base_path: str,
         summary_writer = None,
         save_functions: list[Saver] = [],
-        visual_function: Callable[[torch.Tensor], np.ndarray] = lambda tensor: tensor.cpu().numpy(),
-        log_path_override = None
+        visual_function: Callable[[torch.Tensor], np.ndarray] = lambda tensor: tensor.cpu().numpy()
     ):
         self.device = device
         self.model = model.to(device)
@@ -44,21 +44,21 @@ class DiffusionFramework:
         self.inference_noise_schedule = inference_noise_schedule
         self.evaluation_metrics = evaluation_metrics
 
-        self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.base_path = 'experiments'
+        self.base_path = base_path
+        os.makedirs(self.base_path, exist_ok=True)
+
+        self.log_path = os.path.join(self.base_path, 'logfile.log')
+
+        self.image_base_path = os.path.join(self.base_path, 'output')
+        os.makedirs(self.image_base_path, exist_ok=True)
+
+        self.model_base_path = os.path.join(self.base_path, 'models')
+        os.makedirs(self.model_base_path, exist_ok=True)
 
         self.save_functions = save_functions
         self.visual_function = visual_function
 
         self.summary_writer = summary_writer
-
-        if log_path_override is None:
-            self.log_path = 'logs/diffusion-'+self.timestamp+'.log'
-        else:
-            self.log_path = log_path_override
-        os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
-
-        self.image_base_path = 'output'
 
     def train_single_epoch(self, epoch_number, log_every):
         # place the model into training mode
@@ -130,7 +130,7 @@ class DiffusionFramework:
         for i, data in enumerate(tqdm.tqdm(self.evaluation_dataloader)):
             gt_image, cond_image, mask = data
             # get the current metric results
-            predicted_gt_image, metric_results = self.evaluate_one_batch(gt_image, cond_image, mask)
+            predicted_gt_image, metric_results = self.evaluate_one_batch(gt_image.to(self.device), cond_image.to(self.device), mask.to(self.device))
             # loop over all metrics, and add the result to the cumulative total
             for key in metric_results:
                 running_metric_results[key] += metric_results[key]
@@ -146,7 +146,7 @@ class DiffusionFramework:
         predicted_gt_image = self.infer_one_batch(cond_image, mask)
         # run evaluation metrics on the image
         metric_results = OrderedDict(
-            (metric.name, metric(gt_image, predicted_gt_image)) for metric in self.evaluation_metrics
+            (metric.name, metric(output=predicted_gt_image, target=gt_image)) for metric in self.evaluation_metrics
         )
         return predicted_gt_image, metric_results
 
@@ -156,20 +156,21 @@ class DiffusionFramework:
         predicted_gt_image = torch.randn_like(cond_image)*mask + cond_image*(1-mask)
         # iteratively apply the refinement step to denoise and renoise the image
         # note: t runs from T to 1
-        for t in reversed(tqdm.tqdm(range(1, len(self.inference_noise_schedule)+1))):
+        for i in tqdm.tqdm(range(len(self.inference_noise_schedule))):
+            t = len(self.inference_noise_schedule) - (i+1)
             # actually predict an image, and apply the mask
             predicted_gt_image = self.model.refinement_step(
                 predicted_gt_image_t=predicted_gt_image,
                 cond_image=cond_image,
-                alpha_t=self.inference_noise_schedule.alphas[t],
-                gamma_t=self.inference_noise_schedule.gammas[t]
+                alpha_t=torch.tensor(self.inference_noise_schedule.alphas[t], device=self.device),
+                gamma_t=torch.tensor(self.inference_noise_schedule.gammas[t], device=self.device)
             )*mask + cond_image*(1-mask)
         return predicted_gt_image
     
     def save(self, epoch_number, best=False):
         _best = '_BEST' if best else ''
-        name = 'model_{}_{}{}'.format(self.timestamp, epoch_number, _best)
-        torch.save(self.model.state_dict(), os.path.join(self.base_path,name))
+        name = 'model_{}{}'.format(epoch_number, _best)
+        torch.save(self.model.state_dict(), os.path.join(self.model_base_path, name))
     
     def write_log_line(self, line: str, date_time=True, also_print=False):
         if date_time:
@@ -184,15 +185,18 @@ class DiffusionFramework:
             self.summary_writer.add_scalar(series_name, y_value, x_value)
     
     def log_visuals(self, series_name, index, cond_image, predicted_gt_image, gt_image, mask):
+        cond_image_out = cond_image.squeeze()
+        predicted_gt_image_out = predicted_gt_image.squeeze()
+        gt_image_out = gt_image.squeeze()
         if self.summary_writer is not None:
-            self.summary_writer.image(series_name+'/Conditioned', cond_image, index)
-            self.summary_writer.image(series_name+'/Predicted', predicted_gt_image, index)
-            self.summary_writer.image(series_name+'/Ground Truth', gt_image, index)
+            self.summary_writer.add_image(series_name+'/Conditioned', self.visual_function(cond_image_out), index)
+            self.summary_writer.add_image(series_name+'/Predicted', self.visual_function(predicted_gt_image_out), index)
+            self.summary_writer.add_image(series_name+'/Ground Truth', self.visual_function(gt_image_out), index)
         for writer in self.save_functions:
-            name = '{series}_{type}_{index:d}'.format(series_name, '{}', index)
-            writer(cond_image, self.image_base_path, name=name.format('Cond'))
-            writer(predicted_gt_image, self.image_base_path, name=name.format('Pred'))
-            writer(gt_image, self.image_base_path, name=name.format('GT'))
+            name = '{}_{}_{:d}'.format(series_name, '{}', index)
+            writer(cond_image_out, self.image_base_path, name=name.format('Cond'))
+            writer(predicted_gt_image_out, self.image_base_path, name=name.format('Pred'))
+            writer(gt_image_out, self.image_base_path, name=name.format('GT'))
 
     def main_training_loop(self, log_every=10, eval_every=1):
         epoch_number = 1
@@ -206,9 +210,9 @@ class DiffusionFramework:
                 mean_metric_results = self.evaluate_single_epoch(epoch_number)
                 self.write_log_line('Mean evaluation results follow:', also_print=True)
                 self.write_log_line(pformat(mean_metric_results), also_print=True)
-                rms_metrics = np.sqrt(np.mean(
+                rms_metrics = np.sqrt(np.mean(tuple(
                     mean_metric_results[metric_name]**2 for metric_name in mean_metric_results
-                ))
+                )))
                 self.write_log_line('The RMS value is {:.4f}'.format(rms_metrics), also_print=True)
                 if best_rms_metrics is None: best_rms_metrics = rms_metrics
                 if rms_metrics <= best_rms_metrics:
