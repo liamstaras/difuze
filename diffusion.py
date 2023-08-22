@@ -139,7 +139,7 @@ class DiffusionFramework:
         mean_metric_results = OrderedDict(
             (key, np.mean(running_metric_results[key])/len(self.evaluation_dataloader)) for key in metric_results
         )
-        self.log_visuals('Evaluation', epoch_number, cond_image, predicted_gt_image, gt_image, mask)
+        self.log_visuals('Evaluation', epoch_number, cond_image[-1], predicted_gt_image[-1], gt_image[-1], mask[-1])
         return mean_metric_results
 
     def evaluate_one_batch(self, gt_image: torch.Tensor, cond_image: torch.Tensor, mask: torch.BoolTensor):
