@@ -10,19 +10,18 @@ class NpyDataset(data.Dataset):
         self._gt_index = gt_index
         self._cond_index = cond_index
         self._mask_index = mask_index
-        self._blank_mask = torch.ones(self._data[0].shape)
+        self._single_shape = self._data[0,0].shape
+        # make sure we have a colour channel axis, even if it is only of length 1
+        if len(self._single_shape) == 2: self._single_shape = (1, *self._single_shape)
+        self._blank_mask = torch.ones(self._single_shape)
         round_index = lambda index: round(index*len(self._data)) if type(index) is not int else index
         self._indices = np.arange(round_index(start_index), round_index(stop_index))
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # retrive the current data item
         item = self._data[self._indices[index]]
-        # we must ensure that the image has a colour channel axis, even if it only has one colour channel
-        if len(item.shape) == 3:
-            # add a length 1 axis in the first position
-            item = np.expand_dims(item, 1)
         # extract gt, cond and mask images from input
-        gt_image = torch.tensor(item[self._gt_index], dtype=torch.float32)
-        cond_image = torch.tensor(item[self._cond_index], dtype=torch.float32)
+        gt_image = torch.tensor(item[self._gt_index].reshape(self._single_shape), dtype=torch.float32)
+        cond_image = torch.tensor(item[self._cond_index].reshape(self._single_shape), dtype=torch.float32)
         if self._mask_index is not None:
             mask_image = torch.tensor(item[self._mask_index], dtype=torch.bool)
         else:
@@ -45,11 +44,11 @@ class TifSaver(Saver):
     @staticmethod
     def _save(array, base_path, name):
         from PIL import Image
-        output_path = os.path.join(base_path, name, '.tif')
-        Image.fromarray(array).save(output_path)
+        output_path = os.path.join(base_path, name+'.tif')
+        Image.fromarray((array*255).astype(np.uint8).transpose((1,2,0))).save(output_path)
 
 class NpySaver(Saver):
     @staticmethod
     def _save(array, base_path, name):
-        output_path = os.path.join(base_path, name, '.npy')
+        output_path = os.path.join(base_path, name+'.npy')
         np.save(output_path, array)
