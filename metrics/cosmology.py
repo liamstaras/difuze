@@ -6,13 +6,14 @@ class PixelCounts(Statistic):
         self.bins = bins
         self.data_range = data_range
     def __call__(self, input):
-        return density_series(input, bins=self.bins, data_range=self.data_range)
+        return density_series(np.exp(input)-1, bins=self.bins, data_range=self.data_range)
 
 class PeakCounts(Statistic):
     def __init__(self, bins=100, data_range=(-2,2)):
         self.bins = bins
         self.data_range = data_range
     def __call__(self, input):
+        input = np.exp(input) - 1
         peak_values = []
         for x in range(0, input.shape[0]):
             for y in range(0, input.shape[1]):
@@ -41,7 +42,7 @@ class PowerSpectrumNBK(Statistic):
         self._ArrayMesh = ArrayMesh
 
     def __call__(self, field: np.ndarray):
-        field_mesh = self._ArrayMesh(field, BoxSize=self.box_size)
+        field_mesh = self._ArrayMesh(np.exp(field)-1, BoxSize=self.box_size)
         r_2d = self._FFTPower(field_mesh, mode='1d', kmin=self.kmin, kmax=self.kmax, dk=self.dk)
         return Series(
             x = np.real(r_2d.power['k']),
@@ -57,7 +58,7 @@ class PowerSpectrumPB(Statistic):
         from powerbox import get_power
         self._get_power = get_power
     def __call__(self, field: np.ndarray):
-        spec, k = self._get_power(field, self.box_size, bins=np.arange(self.kmin, self.kmax, self.dk))
+        spec, k = self._get_power(np.exp(field)-1, self.box_size, bins=np.arange(self.kmin, self.kmax, self.dk))
         return Series(
             x = k,
             y = spec
