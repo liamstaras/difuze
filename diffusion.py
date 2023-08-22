@@ -11,10 +11,12 @@ import numpy as np
 from pprint import pformat
 import os
 
+# define a placeholder class for diffusion models, demonstrating the necessity of a refinement_step method
 class DiffusionModel(torch.nn.Module):
     def refinement_step(self, predicted_gt_image_t, cond_image, alpha_t, gamma_t):
         raise AttributeError('Must define a refinement step!')
 
+# a class containing the main algorithms for any diffusion model
 class DiffusionFramework:
     def __init__(
         self,
@@ -33,6 +35,7 @@ class DiffusionFramework:
         save_functions: list[Saver] = [],
         visual_function: Callable[[torch.Tensor], np.ndarray] = lambda tensor: tensor.cpu().numpy()
     ):
+        ## properties specified as arguments
         self.device = device
         self.model = model.to(device)
         self.optimizer = optimizer
@@ -43,24 +46,19 @@ class DiffusionFramework:
         self.evaluation_dataloader = evaluation_dataloader
         self.inference_noise_schedule = inference_noise_schedule
         self.evaluation_metrics = evaluation_metrics
-
         self.base_path = base_path
-        os.makedirs(self.base_path, exist_ok=True)
-
-        self.log_path = os.path.join(self.base_path, 'logfile.log')
-
-        self.image_base_path = os.path.join(self.base_path, 'output')
-        os.makedirs(self.image_base_path, exist_ok=True)
-
-        self.model_base_path = os.path.join(self.base_path, 'models')
-        os.makedirs(self.model_base_path, exist_ok=True)
-
+        self.summary_writer = summary_writer
         self.save_functions = save_functions
         self.visual_function = visual_function
 
-        self.summary_writer = summary_writer
-
+        ## initialize path and subdirectories
+        self.log_path = os.path.join(self.base_path, 'logfile.log')
+        self.image_base_path = os.path.join(self.base_path, 'output')
+        self.model_base_path = os.path.join(self.base_path, 'models')
         self.loss_function_name = self.training_loss_function.__class__.__name__
+        os.makedirs(self.base_path, exist_ok=True)
+        os.makedirs(self.image_base_path, exist_ok=True)
+        os.makedirs(self.model_base_path, exist_ok=True)
 
     def train_single_epoch(self, epoch_number, log_every):
         # place the model into training mode
@@ -125,6 +123,7 @@ class DiffusionFramework:
     def evaluate_single_epoch(self, epoch_number):
         # place the model into evaluation mode
         self.model.eval()
+        # make ordered dict to store lists of metric results
         all_metric_results = OrderedDict(
             (metric.name, []) for metric in self.evaluation_metrics
         )
@@ -141,6 +140,7 @@ class DiffusionFramework:
             # use nanmean to avoid polluting the mean with any stray NaNs
             (key, np.nanmean(all_metric_results)) for key in metric_results
         )
+        # log the FINAL visual from each batch
         self.log_visuals('Evaluation', epoch_number, cond_image[-1], predicted_gt_image[-1], gt_image[-1], mask[-1])
         return mean_metric_results
 
@@ -171,8 +171,11 @@ class DiffusionFramework:
         return predicted_gt_image
     
     def save(self, epoch_number, best=False):
+        # add "_BEST" if this was the best epoch so far
         _best = '_BEST' if best else ''
+        # generate output name
         name = 'model_{}{}'.format(epoch_number, _best)
+        # save model to file
         torch.save(self.model.state_dict(), os.path.join(self.model_base_path, name))
     
     def write_log_line(self, line: str, date_time=True, also_print=False):
