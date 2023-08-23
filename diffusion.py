@@ -205,13 +205,14 @@ class DiffusionFramework:
             writer(predicted_gt_image_out, self.image_base_path, name=name.format('Pred'))
             writer(gt_image_out, self.image_base_path, name=name.format('GT'))
 
-    def main_training_loop(self, log_every=100, eval_every=1):
+    def main_training_loop(self, log_every=100, eval_every=1, save_every=1):
         epoch_number = 1
         best_rms_metrics = None
         while True:
             self.write_log_line('Begin epoch '+str(epoch_number), also_print=True)
             self.write_log_line('Beginning training...', also_print=True)
             self.train_single_epoch(epoch_number, log_every)
+            saved = False
             if epoch_number % eval_every == 0:
                 self.write_log_line('This is an evaluation epoch. Beginning evalution...', also_print=True)
                 mean_metric_results = self.evaluate_single_epoch(epoch_number)
@@ -226,10 +227,19 @@ class DiffusionFramework:
                 self.log_scalar('Evaluation/All_Metrics_RMS', rms_metrics, epoch_number)
                 if best_rms_metrics is None: best_rms_metrics = rms_metrics
                 if rms_metrics <= best_rms_metrics:
-                    self.write_log_line('This is the new best epoch!! Saving model...', also_print=True)
+                    self.write_log_line('This is the new best epoch!!', also_print=True)
+                    best_rms_metrics = rms_metrics              
+                    self.write_log_line('Saving new best model...')
                     self.save(epoch_number, best=True)
-                    self.write_log_line('Done. Resuming training.', also_print=True)
-                    best_rms_metrics = rms_metrics
+                    saved = True
+            if epoch_number % save_every == 0:
+                self.write_log_line('This is a save epoch.')
+                if saved:
+                    self.write_log_line('However, the model has already been saved this epoch. Resuming training.')
+                else:
+                    self.write_log_line('Saving model...')
+                    self.save(epoch_number, best=False)
+                    self.write_log_line('Resuming training.', also_print=True)
             epoch_number += 1
             # consult the scheduler for learning rate change
             self.scheduler.step()
