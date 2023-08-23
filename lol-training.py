@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser(description='Run training')
 parser.add_argument('--batch-size', type=int, default=50)
 parser.add_argument('--initial-learning-rate', type=float, default=1e-4)
 parser.add_argument('--gamma-decay', type=float, default=0.9)
-parser.add_argument('--loss-function', type=float, default='L1Loss')
+parser.add_argument('--loss-function', type=str, default='L1Loss')
 
 args = parser.parse_args()
 
