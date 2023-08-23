@@ -1,7 +1,7 @@
 import torch
 import numpy as np
+from log import DataLogger
 from support import NoiseSchedule, NumpyMetric
-from metrics.support import Statistic
 from data import NpyDataset, NpySaver, TifSaver
 from metrics.cosmology import PixelCounts, PeakCounts, PowerSpectrum
 from metrics.metrics import RelativeDifference
@@ -81,9 +81,6 @@ evaluation_metrics = [
 training_dataloader = DataLoader(training_dataset, batch_size=32, shuffle=True)
 evaluation_dataloader = DataLoader(evaulation_dataset, batch_size=32, shuffle=False)
 
-# prepare tensorboard
-summary_writer = SummaryWriter(log_dir=os.path.join(base_path, 'tensorboard'))
-
 # make function for generating images
 def tensor_to_image_cmocean(tensor):
     cmin = -2
@@ -94,11 +91,17 @@ def tensor_to_image_cmocean(tensor):
     return image.transpose((2,0,1))[:3]
 
 # specify functions to save outputs
+visual_function = tensor_to_image_cmocean
 save_functions = [
     NpySaver(),
     TifSaver(tensor_to_image_cmocean)
 ]
-visual_function = tensor_to_image_cmocean
+
+data_logger = DataLogger(
+    use_tensorboard=True,
+    visual_function=visual_function,
+    save_functions=save_functions
+)
 
 # wrap everything up in the diffusion framework
 framework = DiffusionFramework(
@@ -112,10 +115,7 @@ framework = DiffusionFramework(
     evaluation_dataloader=evaluation_dataloader,
     inference_noise_schedule=inference_noise_schedule,
     evaluation_metrics=evaluation_metrics,
-    base_path=base_path,
-    summary_writer=summary_writer,
-    save_functions=save_functions,
-    visual_function=visual_function
+    data_logger=data_logger
 )
 
 framework.main_training_loop()

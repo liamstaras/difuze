@@ -2,6 +2,7 @@ import torch
 import random
 import tqdm
 from data import Saver
+from log import DataLogger
 from support import NoiseSchedule, TorchMetric
 from torch.utils.data import DataLoader
 from collections import OrderedDict
@@ -23,17 +24,14 @@ class DiffusionFramework:
         device: str,
         model: DiffusionModel,
         optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.lr_scheduler._LRScheduler,
+        scheduler,
         training_dataloader: DataLoader,
         training_noise_schedule: NoiseSchedule,
         training_loss_function: torch.nn.modules.loss._Loss,
         evaluation_dataloader: DataLoader,
         inference_noise_schedule: NoiseSchedule,
         evaluation_metrics: list[TorchMetric],
-        base_path: str,
-        summary_writer = None,
-        save_functions: list[Saver] = [],
-        visual_function: Callable[[torch.Tensor], np.ndarray] = lambda tensor: tensor.cpu().numpy()
+        data_logger: DataLogger
     ):
         ## properties specified as arguments
         self.device = device
@@ -46,19 +44,7 @@ class DiffusionFramework:
         self.evaluation_dataloader = evaluation_dataloader
         self.inference_noise_schedule = inference_noise_schedule
         self.evaluation_metrics = evaluation_metrics
-        self.base_path = base_path
-        self.summary_writer = summary_writer
-        self.save_functions = save_functions
-        self.visual_function = visual_function
-
-        ## initialize path and subdirectories
-        self.log_path = os.path.join(self.base_path, 'logfile.log')
-        self.image_base_path = os.path.join(self.base_path, 'output')
-        self.model_base_path = os.path.join(self.base_path, 'models')
-        self.loss_function_name = self.training_loss_function.__class__.__name__
-        os.makedirs(self.base_path, exist_ok=True)
-        os.makedirs(self.image_base_path, exist_ok=True)
-        os.makedirs(self.model_base_path, exist_ok=True)
+        self.data_logger = data_logger
 
 
     def train_single_epoch(self, epoch_number: int, log_every: int) -> torch.Tensor:
@@ -78,30 +64,37 @@ class DiffusionFramework:
         for i, data in enumerate(pbar, start=1):
             # extract the images from the loaded data
             gt_image_batch, cond_image_batch, mask = data
+
             # add the loss to the cumulative total
             current_loss = self.train_one_batch(gt_image_batch.to(self.device), cond_image_batch.to(self.device), mask.to(self.device))
-            # display the current loss
+
+            # display the current learning rate and loss on the progress bat
             pbar.set_postfix_str('current learning rate: {:.2e}, current loss: {:.4f}'.format(float(self.optimizer.param_groups[-1]['lr']), float(current_loss)))
+
             running_loss += current_loss
             # check if we are at a logging iteration
             if i % log_every == 0:
                 # find the mean loss over the past logging group
                 mean_loss = running_loss/log_every
-                # write to the log
-                self.write_log_line(
-                    'Epoch {: >3d}, iteration {: >6d}. Current learning rate is {:.2e}. Mean loss: {:.5f}.'.format(
-                        epoch_number,
-                        i,
-                        self.optimizer.param_groups[-1]['lr'],
-                        mean_loss
-                    )
-                )
+
                 # determine the global index for logging purposes
                 global_index = (epoch_number-1)*len(self.training_dataloader) + i
-                # write to tensorboard (if initialized)
-                self.log_scalar('train/'+self.loss_function_name, mean_loss, global_index)
+
+                # write to the log
+                self.data_logger.scalar(
+                    series_name = 'Train/'+self.training_loss_function.__class__.__name__,
+                    y_value = mean_loss,
+                    status_message = 'Epoch {: >3d}, iteration {: >6d}. Current learning rate is {:.2e}'.format(
+                        epoch_number,
+                        i,
+                        self.optimizer.param_groups[-1]['lr']
+                    ),
+                    tensorboard_x_value = global_index,
+                )
+
                 # zero the running counter
                 running_loss = 0.
+
         # return the most recent loss
         return mean_loss
 
@@ -134,7 +127,7 @@ class DiffusionFramework:
         self.optimizer.step()
         return loss
 
-    def evaluate_single_epoch(self, epoch_number: int) -> OrderedDict:
+    def evaluate_single_epoch(self, epoch_number: int) -> float:
         """Sample from the neural network over a single iteration of the evaluation dataloader, and run metrics
 
         epoch_number: the index of the current epoch, for logging purposes
@@ -156,11 +149,42 @@ class DiffusionFramework:
             # use nanmean to avoid polluting the mean with any stray NaNs
             (key, np.nanmean(all_metric_results[key])) for key in metric_results
         )
-        # log the FINAL visual from each batch
-        self.log_visuals('Evaluation', epoch_number, cond_image_batch[-1], predicted_gt_image_batch[-1], gt_image_batch[-1], mask[-1])
-        return mean_metric_results
 
-    def evaluate_one_batch(self, gt_image_batch: torch.Tensor, cond_image_batch: torch.Tensor, mask: torch.BoolTensor) -> tuple[torch.Tensor, OrderedDict]:
+        # calculate an RMS score
+        rms_metrics = np.sqrt(np.mean(tuple(
+            mean_metric_results[metric_name]**2 for metric_name in mean_metric_results
+        )))
+        mean_metric_results['All_Metrics_RMS'] = rms_metrics
+
+        self.data_logger.message('Metric results:', also_print=True)
+
+        # log all metric scores
+        for metric_name in mean_metric_results:
+            self.data_logger.scalar(
+                series_name = 'Evaluation/'+metric_name,
+                y_value = mean_metric_results[metric_name],
+                tensorboard_x_value = epoch_number,
+                also_print = True
+            )
+        
+        # log the FINAL visual from each batch
+        final_visuals = OrderedDict((
+            ('Cond', cond_image_batch[-1].squeeze()),
+            ('Pred', predicted_gt_image_batch[-1].squeeze()),
+            ('GT', gt_image_batch[-1].squeeze())
+        ))
+        for visual_name in final_visuals:
+            self.data_logger.tensor(
+                series_name = 'Evaluation/'+visual_name,
+                tensor = final_visuals[visual_name],
+                index = epoch_number,
+            )
+        
+        # return the RMS score for determining the best epoch
+        return rms_metrics
+    
+
+    def evaluate_one_batch(self, gt_image_batch: torch.Tensor, cond_image_batch: torch.Tensor, mask: torch.BoolTensor) -> tuple[torch.Tensor, OrderedDict[str, tuple[float]]]:
         """Sample from the neural network over a single batch of images, and run metrics
         
         gt_image_batch: the batch of ground truth images
@@ -201,76 +225,6 @@ class DiffusionFramework:
                 gamma_t=torch.tensor(self.inference_noise_schedule.gammas[t], device=self.device)
             )*mask + cond_image_batch*(1-mask) # apply masking
         return predicted_gt_image_batch
-    
-    def save(self, epoch_number: int, best: bool = False) -> None:
-        """Save the state_dict of the model to an automatically generated path
-
-        epoch_number: the index of the current epoch
-        best: whether "_BEST" should be added to the name of the file
-        """
-
-        # add "_BEST" if this was the best epoch so far
-        _best = '_BEST' if best else ''
-        # generate output name
-        name = 'model_{}{}'.format(epoch_number, _best)
-        # save model to file
-        torch.save(self.model.state_dict(), os.path.join(self.model_base_path, name))
-    
-    def write_log_line(self, line: str, date_time: bool = True, also_print: bool = False) -> None:
-        """Add a line to the log file
-
-        line: the text to add
-        date_time: whether the date and time should be included in the log message
-        also_print: whether to additionally display the output on the screen
-        """
-
-        if date_time:
-            line = datetime.now().strftime('%Y%m%d_%H%M%S: ') + line
-        if also_print: print(line)
-        with open(self.log_path, 'a') as log_file:
-            log_file.write(line+'\n')
-    
-    def log_scalar(self, series_name: str, y_value: float, x_value: float) -> None:
-        """Add a scalar to TensorBoard
-
-        series_name: the name of the series to add to
-        y_value: the y coordinate of the scalar to add
-        x_value: the x coordinate of the scalar to add
-        """
-
-        # if a tensorboard instance has been passed, use it to log the scalar
-        if self.summary_writer is not None:
-            self.summary_writer.add_scalar(series_name, y_value, x_value)
-    
-    def log_visuals(self, series_name: str, index: int, cond_image: torch.Tensor, predicted_gt_image: torch.Tensor, gt_image: torch.Tensor, mask: torch.Tensor) -> None:
-        """Write visuals to tensorboard and files
-
-        series_name: the name of the series to add to
-        index: the index of the current image set
-        cond_image: a single conditioned image
-        predicted_gt_image: a single predicted ground truth image
-        gt_image: a single ground truth image
-        """
-
-        # remove any excess axes to avoid problems with processing
-        cond_image_out = cond_image.squeeze()
-        predicted_gt_image_out = predicted_gt_image.squeeze()
-        gt_image_out = gt_image.squeeze()
-
-        # use TensorBoard if it's enabled; make sure to run the visual_function to turn outputs into images
-        if self.summary_writer is not None:
-            self.summary_writer.add_image_batch(series_name+'/Conditioned', self.visual_function(cond_image_out), index)
-            self.summary_writer.add_image_batch(series_name+'/Predicted', self.visual_function(predicted_gt_image_out), index)
-            self.summary_writer.add_image_batch(series_name+'/Ground Truth', self.visual_function(gt_image_out), index)
-        
-        # generate a friendly file name stem
-        name = '{}_{}_{:d}'.format(series_name, '{}', index)
-
-        # save outputs to files, using each writer
-        for writer in self.save_functions:
-            writer(cond_image_out, self.image_base_path, name=name.format('Cond'))
-            writer(predicted_gt_image_out, self.image_base_path, name=name.format('Pred'))
-            writer(gt_image_out, self.image_base_path, name=name.format('GT'))
 
     def main_training_loop(self, log_every: int = 100, eval_every: int = 1, save_every: int = 1) -> None:
         """Run the training and evaluation cycle for the model
@@ -286,8 +240,8 @@ class DiffusionFramework:
 
         while True:
             # add logging messages
-            self.write_log_line('Begin epoch '+str(epoch_number), also_print=True)
-            self.write_log_line('Beginning training...', also_print=True)
+            self.data_logger.message('Begin epoch '+str(epoch_number), also_print=True)
+            self.data_logger.message('Beginning training...', also_print=True)
 
             # actually run training
             self.train_single_epoch(epoch_number, log_every)
@@ -298,39 +252,22 @@ class DiffusionFramework:
             # check if we are at an evaluation epoch
             if epoch_number % eval_every == 0:
                 # notify the user that evaluation is about to commence
-                self.write_log_line('This is an evaluation epoch. Beginning evalution...', also_print=True)
+                self.data_logger.message('This is an evaluation epoch. Beginning evalution...', also_print=True)
 
-                # actually run evaluation, and store the results for each metric in an OrderedDict
-                mean_metric_results = self.evaluate_single_epoch(epoch_number)
-
-                # log the results using pretty print
-                self.write_log_line('Mean evaluation results follow:', also_print=True)
-                self.write_log_line(pformat(mean_metric_results), also_print=True)
-
-                # calculate an RMS score
-                rms_metrics = np.sqrt(np.mean(tuple(
-                    mean_metric_results[metric_name]**2 for metric_name in mean_metric_results
-                )))
-
-                # display the RMS score
-                self.write_log_line('The RMS value is {:.4f}'.format(rms_metrics), also_print=True)
-
-                # write all metric scores to tensorboard
-                for metric_name in mean_metric_results:
-                    self.log_scalar('Evaluation/'+metric_name, mean_metric_results[metric_name], epoch_number)
-                self.log_scalar('Evaluation/All_Metrics_RMS', rms_metrics, epoch_number)
+                # actually run evaluation, storing the RMS of all the metrics
+                rms_metrics = self.evaluate_single_epoch(epoch_number)
 
                 # see if this is the best epoch
                 if rms_metrics <= best_rms_metrics:
                     # notify the user
-                    self.write_log_line('This is the new best epoch!!', also_print=True)
+                    self.data_logger.message('This is the new best epoch!!', also_print=True)
 
                     # update the tracker
                     best_rms_metrics = rms_metrics
 
                     # save this model as the new best
-                    self.write_log_line('Saving new best model...')
-                    self.save(epoch_number, best=True)
+                    self.data_logger.message('Saving new best model...')
+                    self.data_logger.model(epoch_number, self.model, best=True)
 
                     # keep track of the fact that we've already saved
                     saved = True
@@ -338,16 +275,16 @@ class DiffusionFramework:
             # see if we're at a save epoch
             if epoch_number % save_every == 0:
                 # inform the user
-                self.write_log_line('This is a save epoch.')
+                self.data_logger.message('This is a save epoch.', also_print=True)
 
                 # check if we've already saved
                 if saved:
-                    self.write_log_line('However, the model has already been saved this epoch. Resuming training.')
+                    self.data_logger.message('However, the model has already been saved this epoch. Resuming training.', also_print=True)
                 else:
                     # save the model
-                    self.write_log_line('Saving model...')
-                    self.save(epoch_number, best=False)
-                    self.write_log_line('Resuming training.', also_print=True)
+                    self.data_logger.message('Saving model...', also_print=True)
+                    self.data_logger.model(epoch_number, self.model, best=False)
+                    self.data_logger.message('Resuming training.', also_print=True)
             
             # increase the epoch number
             epoch_number += 1

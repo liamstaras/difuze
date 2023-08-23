@@ -45,10 +45,12 @@ class TifSaver(Saver):
     def _save(array, base_path, name):
         from PIL import Image
         output_path = os.path.join(base_path, name+'.tif')
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         Image.fromarray((array*255).astype(np.uint8).transpose((1,2,0))).save(output_path)
 
 class NpySaver(Saver):
     @staticmethod
     def _save(array, base_path, name):
         output_path = os.path.join(base_path, name+'.npy')
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         np.save(output_path, array)

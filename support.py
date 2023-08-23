@@ -29,7 +29,7 @@ class TorchMetric:
             metric_fn(output[i].squeeze(), target[i].squeeze()) for i in range(batch_size)
         )
     @property
-    def name(self):
+    def name(self) -> str:
         return self.metric_fn.name+'->'+self.__class__.__name__
 
 class NumpyMetric(TorchMetric):
