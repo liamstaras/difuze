@@ -8,11 +8,16 @@ from metrics.metrics import RelativeDifference
 from diffusion import DiffusionFramework
 from palette.models import PaletteModel
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 from socket import gethostname
 import os
 import cmocean
+
+## IMPORTANT HYPERPARAMETERS ##
+BATCH_SIZE = 50
+INITIAL_LEARNING_RATE = 1e-4
+LEARNING_RATE_GAMMA_DECAY = 0.9
+
 
 # determine whether we will use the GPU
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -38,12 +43,12 @@ model = PaletteModel(
 training_loss_function = torch.nn.L1Loss()
 optimizer = torch.optim.Adam(
     params=list(filter(lambda p: p.requires_grad, model.parameters())), 
-    lr=5e-6, 
+    lr=INITIAL_LEARNING_RATE, 
     weight_decay=0
 )
 scheduler = torch.optim.lr_scheduler.ExponentialLR(
     optimizer=optimizer,
-    gamma=0.5
+    gamma=LEARNING_RATE_GAMMA_DECAY
 )
 
 # make noise schedules
@@ -78,8 +83,8 @@ evaluation_metrics = [
     ) for statistic in statistics]
 
 # make dataloaders
-training_dataloader = DataLoader(training_dataset, batch_size=32, shuffle=True)
-evaluation_dataloader = DataLoader(evaulation_dataset, batch_size=32, shuffle=False)
+training_dataloader = DataLoader(training_dataset, batch_size=BATCH_SIZE, shuffle=True)
+evaluation_dataloader = DataLoader(evaulation_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
 # make function for generating images
 def tensor_to_image_cmocean(tensor):
