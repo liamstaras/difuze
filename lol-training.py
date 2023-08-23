@@ -18,6 +18,7 @@ parser = argparse.ArgumentParser(description='Run training')
 parser.add_argument('--batch-size', type=int, default=50)
 parser.add_argument('--initial-learning-rate', type=float, default=1e-4)
 parser.add_argument('--gamma-decay', type=float, default=0.9)
+parser.add_argument('--loss-function', type=float, default='L1Loss')
 
 args = parser.parse_args()
 
@@ -25,7 +26,7 @@ args = parser.parse_args()
 BATCH_SIZE = args.batch_size
 INITIAL_LEARNING_RATE = args.initial_learning_rate
 LEARNING_RATE_GAMMA_DECAY = args.gamma_decay
-
+LOSS_FUNCTION = args.loss_function
 
 # determine whether we will use the GPU
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -48,12 +49,17 @@ model = PaletteModel(
 )
 
 # create the loss function, optimizer and scheduler
-training_loss_function = torch.nn.L1Loss()
+if LOSS_FUNCTION == 'L1Loss':
+    training_loss_function = torch.nn.L1Loss()
+elif LOSS_FUNCTION == 'MSELoss':
+    training_loss_function = torch.nn.MSELoss()
+
 optimizer = torch.optim.Adam(
     params=list(filter(lambda p: p.requires_grad, model.parameters())), 
     lr=INITIAL_LEARNING_RATE, 
     weight_decay=0
 )
+
 scheduler = torch.optim.lr_scheduler.ExponentialLR(
     optimizer=optimizer,
     gamma=LEARNING_RATE_GAMMA_DECAY
