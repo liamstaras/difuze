@@ -158,7 +158,7 @@ class TrainingFramework:
         return loss
 
     @torch.no_grad()
-    def evaluate_single_epoch(self, epoch_number: int) -> float:
+    def evaluate_single_epoch(self) -> float:
         """Sample from the neural network over a single iteration of the evaluation dataloader, and run metrics
 
         epoch_number: the index of the current epoch, for logging purposes
@@ -201,7 +201,7 @@ class TrainingFramework:
             self.data_logger.scalar(
                 series_name = 'Evaluation/Metric/'+metric_name,
                 y_value = mean_metric_results[metric_name],
-                tensorboard_x_value = epoch_number,
+                tensorboard_x_value = self.epoch_number,
                 also_print = True
             )
         
@@ -215,7 +215,7 @@ class TrainingFramework:
             self.data_logger.tensor(
                 series_name = 'Evaluation/Visual/'+visual_name,
                 tensor = final_visuals[visual_name],
-                index = epoch_number,
+                index = self.epoch_number,
             )
         
         # return the RMS score for determining the best epoch
@@ -240,7 +240,6 @@ class TrainingFramework:
         )
         return predicted_gt_image_batch, metric_results
     
-    @torch.no_grad()
     @property
     def state(self) -> dict:
         # build a state dict containing all important parts of the framework
@@ -261,7 +260,6 @@ class TrainingFramework:
 
         return state_dict
     
-    @torch.no_grad()
     @state.setter
     def state(self, state_dict: dict):
         # load important properties from a state dict

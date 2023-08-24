@@ -1,7 +1,5 @@
 import torch
 import torch.utils.data
-import numpy as np
-import random
 import tqdm
 
 from collections import OrderedDict
@@ -9,7 +7,6 @@ from collections import OrderedDict
 from . import log
 from . import support
 from . import models
-from . import metrics
 
 # a class containing the main algorithms for training any diffusion model
 class InferenceFramework:
