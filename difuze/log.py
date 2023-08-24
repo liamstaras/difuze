@@ -95,11 +95,12 @@ class DataLogger:
     def tensor(
             self,
             series_name: str,
+            tag: str,
             tensor: torch.Tensor,
             index: int,
             add_to_tensorboard: bool = True,
             save_locally: bool = True,
-            filename_format: str = '_{:0>6d}'
+            filename_format: str = '{series}{index:0>8d}_{tag}'
         ) -> None:
         """Add an output tensor to Tensorboard and/or save it locally
         """
@@ -112,7 +113,7 @@ class DataLogger:
             os.makedirs(self.output_base_directory, exist_ok=True)
 
             # build the path from index and series name
-            output_name = os.path.normpath(series_name+filename_format.format(index))
+            output_name = os.path.normpath(filename_format.format(index=index, series=series_name, tag=tag))
 
             # loop through each writer
             for saver in self.save_functions:

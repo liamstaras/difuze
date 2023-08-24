@@ -57,13 +57,12 @@ class InferenceFramework:
 
         # loop over the inference data, showing tqdm progress bar and tracking the index
         for i, data in enumerate(tqdm.tqdm(self.inference_dataloader)):
-            gt_image_batch, cond_image_batch, mask = data
+            gt_image_batch, cond_image_batch, mask, actual_index = data
             # infer the image
             predicted_gt_image_batch = self.infer_one_batch(cond_image_batch.to(self.device), mask.to(self.device))
             
             # log the each visual from the batch
             for j in range(len(predicted_gt_image_batch)):
-                actual_index = i*self.inference_dataloader.batch_size + j
                 visuals = OrderedDict((
                     ('Cond', cond_image_batch[j].squeeze()),
                     ('Pred', predicted_gt_image_batch[j].squeeze()),
@@ -71,9 +70,10 @@ class InferenceFramework:
                 ))
                 for visual_name in visuals:
                     self.data_logger.tensor(
-                        series_name = 'Inference/Output/'+visual_name,
+                        series_name = 'Inference/Output/',
+                        tag = visual_name,
                         tensor = visuals[visual_name],
-                        index = actual_index
+                        index = actual_index[j]
                     )
         
   

@@ -16,6 +16,8 @@ class NpyDataset(torch.utils.data.Dataset):
         round_index = lambda index: round(index*len(self._data)) if type(index) is not int else index
         self._indices = np.arange(round_index(start_index), round_index(stop_index))
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        # determine the actual index of the item
+        actual_index = self._indices[index] % len(self._data)
         # retrive the current data item
         item = self._data[self._indices[index]]
         # extract gt, cond and mask images from input
@@ -25,7 +27,7 @@ class NpyDataset(torch.utils.data.Dataset):
             mask_image = torch.tensor(item[self._mask_index], dtype=torch.bool)
         else:
             mask_image = self._blank_mask
-        return gt_image, cond_image, mask_image
+        return gt_image, cond_image, mask_image, actual_index
     def __len__(self):
         return len(self._indices)
 

@@ -93,7 +93,7 @@ class TrainingFramework:
         # using zero indexing is annoying for mean calc, so start from 1
         for i, data in enumerate(pbar, start=1):
             # extract the images from the loaded data
-            gt_image_batch, cond_image_batch, mask = data
+            gt_image_batch, cond_image_batch, mask, actual_index = data
 
             # add the loss to the cumulative total
             current_loss = self.train_one_batch(gt_image_batch.to(self.device), cond_image_batch.to(self.device), mask.to(self.device))
@@ -172,7 +172,7 @@ class TrainingFramework:
         )
         # loop over the evaluation data, showing tqdm progress bar and tracking the index
         for i, data in enumerate(tqdm.tqdm(self.evaluation_dataloader)):
-            gt_image_batch, cond_image_batch, mask = data
+            gt_image_batch, cond_image_batch, mask, actual_index = data
             # get the current metric results
             predicted_gt_image_batch, metric_results = self.evaluate_one_batch(gt_image_batch.to(self.device), cond_image_batch.to(self.device), mask.to(self.device))
             # loop over all metrics, and add the result for each image in the batch to the list for this epoch
@@ -207,13 +207,14 @@ class TrainingFramework:
         
         # log the FINAL visual from the FINAL batch
         final_visuals = OrderedDict((
-            ('Cond', cond_image_batch[-1].squeeze()),
-            ('Pred', predicted_gt_image_batch[-1].squeeze()),
-            ('GT', gt_image_batch[-1].squeeze())
+            ('{:0>8d}_Cond'.format(actual_index[-1]), cond_image_batch[-1].squeeze()),
+            ('{:0>8d}_Pred'.format(actual_index[-1]), predicted_gt_image_batch[-1].squeeze()),
+            ('{:0>8d}_GT'.format(actual_index[-1]), gt_image_batch[-1].squeeze())
         ))
         for visual_name in final_visuals:
             self.data_logger.tensor(
-                series_name = 'Evaluation/Visual/'+visual_name,
+                series_name = 'Evaluation/Visual/',
+                tag = visual_name,
                 tensor = final_visuals[visual_name],
                 index = self.epoch_number,
             )
