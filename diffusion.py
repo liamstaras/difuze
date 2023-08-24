@@ -78,7 +78,7 @@ class DiffusionFramework:
                 mean_loss = running_loss/log_every
 
                 # determine the global index for logging purposes
-                global_index = (epoch_number-1)*len(self.training_dataloader) + i
+                global_index = ((epoch_number-1)*len(self.training_dataloader) + i)*self.training_dataloader.batch_size
 
                 # write to the log
                 self.data_logger.scalar(
