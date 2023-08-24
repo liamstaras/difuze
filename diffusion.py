@@ -183,7 +183,7 @@ class DiffusionFramework:
         # log all metric scores
         for metric_name in mean_metric_results:
             self.data_logger.scalar(
-                series_name = 'Evaluation/'+metric_name,
+                series_name = 'Evaluation/Metrics/'+metric_name,
                 y_value = mean_metric_results[metric_name],
                 tensorboard_x_value = epoch_number,
                 also_print = True
@@ -197,7 +197,7 @@ class DiffusionFramework:
         ))
         for visual_name in final_visuals:
             self.data_logger.tensor(
-                series_name = 'Evaluation/'+visual_name,
+                series_name = 'Evaluation/Visuals/'+visual_name,
                 tensor = final_visuals[visual_name],
                 index = epoch_number,
             )
