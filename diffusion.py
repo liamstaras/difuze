@@ -127,6 +127,7 @@ class DiffusionFramework:
         self.optimizer.step()
         return loss
 
+    @torch.no_grad
     def evaluate_single_epoch(self, epoch_number: int) -> float:
         """Sample from the neural network over a single iteration of the evaluation dataloader, and run metrics
 
@@ -183,7 +184,7 @@ class DiffusionFramework:
         # return the RMS score for determining the best epoch
         return rms_metrics
     
-
+    @torch.no_grad()
     def evaluate_one_batch(self, gt_image_batch: torch.Tensor, cond_image_batch: torch.Tensor, mask: torch.BoolTensor) -> tuple[torch.Tensor, OrderedDict[str, tuple[float]]]:
         """Sample from the neural network over a single batch of images, and run metrics
         
@@ -202,7 +203,7 @@ class DiffusionFramework:
         )
         return predicted_gt_image_batch, metric_results
 
-
+    @torch.no_grad()
     def infer_one_batch(self, cond_image_batch: torch.Tensor, mask: torch.BoolTensor) -> torch.Tensor:
         """Sample from the neural network over a single batch of images
 
