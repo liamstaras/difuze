@@ -27,6 +27,7 @@ class TrainingFramework:
         evaluation_metrics: list[metrics.TorchMetric],
         data_logger: log.DataLogger,
 
+        state_dict_to_load: dict | None = None,
         metric_scheduler = None
     ):
         ## properties specified as arguments
@@ -43,6 +44,8 @@ class TrainingFramework:
         self.data_logger = data_logger
 
         self.metric_scheduler = metric_scheduler
+
+        self.epoch_number = 0
 
         ## summarize configuration
         self.data_logger.message('\n'.join((
@@ -61,15 +64,25 @@ class TrainingFramework:
             )
         )
 
+        if state_dict_to_load is not None:
+            self.data_logger.message('Loading state from dict...')
+            self.state = state_dict_to_load
+
         self._initial_learning_rate = self.optimizer.param_groups[-1]['lr']
 
 
-    def train_single_epoch(self, epoch_number: int, log_every: int) -> torch.Tensor:
+    def train_single_epoch(self, log_every: int) -> torch.Tensor:
         """Train the neural network over a full iteration of the training dataloader
 
-        epoch_number: the index of the current epoch, for logging purposes
         log_every: the number of iterations between each logging event
         """
+
+        # update the epoch number
+        self.epoch_number += 1
+
+        # add logging messages
+        self.data_logger.message('This is epoch '+str(self.epoch_number), also_print=True)
+        self.data_logger.message('Beginning training...', also_print=True)
 
         # zero loss counters
         running_loss = 0.
@@ -94,15 +107,15 @@ class TrainingFramework:
                 # find the mean loss over the past logging group
                 mean_loss = running_loss/log_every
 
-                # determine the global index for logging purposes
-                global_index = ((epoch_number-1)*len(self.training_dataloader) + i)*self.training_dataloader.batch_size
+                # determine the global index for logging purposes - equal to the number of images seen by the model
+                global_index = ((self.epoch_number-1)*len(self.training_dataloader) + i)*self.training_dataloader.batch_size
 
                 # write to the log
                 self.data_logger.scalar(
                     series_name = 'Train/'+self.training_loss_function.__class__.__name__,
                     y_value = mean_loss,
                     status_message = 'Epoch {: >3d}, iteration {: >6d}. Current learning rate is {:.2e}'.format(
-                        epoch_number,
+                        self.epoch_number,
                         i,
                         self.optimizer.param_groups[-1]['lr']
                     ),
@@ -150,6 +163,9 @@ class TrainingFramework:
 
         epoch_number: the index of the current epoch, for logging purposes
         """
+        # inform the user that evaluation is about to commence
+        self.data_logger.message('This is an evaluation epoch. Beginning evalution...', also_print=True)
+        
         # make ordered dict to store lists of metric results
         all_metric_results = OrderedDict(
             (metric.name, []) for metric in self.evaluation_metrics
@@ -225,14 +241,16 @@ class TrainingFramework:
         return predicted_gt_image_batch, metric_results
     
     @torch.no_grad()
-    def save_state(self, epoch_number, rms_metrics, best=False):
+    @property
+    def state(self) -> dict:
         # build a state dict containing all important parts of the framework
         state_dict = {
-            'epoch': epoch_number,
+            'epoch_number': self.epoch_number,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'loss_scheduler_state_dict': self.loss_scheduler.state_dict(),
-            'rms_metrics': rms_metrics,
+            'recent_rms_metrics': self.recent_rms_metrics,
+            'best_rms_metrics': self.best_rms_metrics,
             'initial_lr': self._initial_learning_rate,
             'batch_size': self.training_dataloader.batch_size
         }
@@ -240,13 +258,20 @@ class TrainingFramework:
         # add the metric scheduler if it exists
         if self.metric_scheduler is not None:
             state_dict['metric_scheduler_state_dict'] = self.metric_scheduler.state_dict()
-        
-        # use the logger to write the state dict
-        self.data_logger.state_dict(
-            epoch_number = epoch_number,
-            state_dict = state_dict,
-            best = best
-        )
+
+        return state_dict
+    
+    @torch.no_grad()
+    @state.setter
+    def state(self, state_dict: dict):
+        # load important properties from a state dict
+        self.epoch_number = state_dict['epoch_number']
+        self.model.load_state_dict(state_dict['model_state_dict'])
+        self.optimizer.load_state_dict(state_dict['optimizer_state_dict'])
+        self.loss_scheduler.load_state_dict(state_dict['loss_scheduler_state_dict'])
+        self.recent_rms_metrics = state_dict['recent_rms_metrics']
+        self._initial_learning_rate = state_dict['initial_lr']  
+    
 
     def main_training_loop(self, log_every: int = 100, eval_every: int = 1, save_every: int = 1) -> None:
         """Run the training and evaluation cycle for the model
@@ -257,45 +282,43 @@ class TrainingFramework:
         """
 
         # keep track of the epoch number and the best metric score
-        epoch_number = 1 # zero indexing is confusing for the user
-        best_rms_metrics = np.inf # we are trying to minimize this quantity
+        self.best_rms_metrics = np.inf # we are trying to minimize this quantity
 
         while True:
-            # add logging messages
-            self.data_logger.message('Begin epoch '+str(epoch_number), also_print=True)
-            self.data_logger.message('Beginning training...', also_print=True)
+            
 
             # actually run training
-            self.train_single_epoch(epoch_number, log_every)
+            self.train_single_epoch(log_every)
 
             # keep track of whether we have saved the model this epoch
             saved = False
 
             # check if we are at an evaluation epoch
-            if epoch_number % eval_every == 0:
-                # notify the user that evaluation is about to commence
-                self.data_logger.message('This is an evaluation epoch. Beginning evalution...', also_print=True)
-
+            if self.epoch_number % eval_every == 0:
                 # actually run evaluation, storing the RMS of all the metrics
-                rms_metrics = self.evaluate_single_epoch(epoch_number)
+                self.recent_rms_metrics = self.evaluate_single_epoch()
 
                 # see if this is the best epoch
-                if rms_metrics <= best_rms_metrics:
+                if self.recent_rms_metrics <= self.best_rms_metrics:
                     # notify the user
                     self.data_logger.message('This is the new best epoch!!', also_print=True)
 
                     # update the tracker
-                    best_rms_metrics = rms_metrics
+                    self.best_rms_metrics = self.recent_rms_metrics
 
                     # save this model as the new best
                     self.data_logger.message('Saving new best model...')
-                    self.save_state(epoch_number, rms_metrics, best=True)
+                    self.data_logger.state_dict(
+                        epoch_number = self.epoch_number,
+                        state_dict = self.state,
+                        best = True
+                    )
 
                     # keep track of the fact that we've already saved
                     saved = True
             
             # see if we're at a save epoch
-            if epoch_number % save_every == 0:
+            if self.epoch_number % save_every == 0:
                 # inform the user
                 self.data_logger.message('This is a save epoch.', also_print=True)
 
@@ -305,10 +328,12 @@ class TrainingFramework:
                 else:
                     # save the model
                     self.data_logger.message('Saving model...', also_print=True)
-                    self.save_state(epoch_number, rms_metrics, best=False)
+                    self.data_logger.state_dict(
+                        epoch_number = self.epoch_number,
+                        state_dict = self.state,
+                        best = False
+                    )
                     self.data_logger.message('Resuming training.', also_print=True)
-            
-            # increase the epoch number
-            epoch_number += 1
+
             # consult the scheduler for learning rate change
             self.loss_scheduler.step()

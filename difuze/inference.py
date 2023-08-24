@@ -30,11 +30,11 @@ class InferenceFramework:
         self.data_logger = data_logger
 
         ## load states from checkpoint
+        self.epoch_number = checkpoint_state_dict['epoch_number']
         self.model.load_state_dict(checkpoint_state_dict['model_state_dict'])
-        epoch_number = checkpoint_state_dict['epoch']
-        rms_metrics = checkpoint_state_dict['rms_metrics']
-        batch_size = checkpoint_state_dict['batch_size']
-        initial_lr = checkpoint_state_dict['initial_lr']
+        self.recent_rms_metrics = checkpoint_state_dict['recent_rms_metrics']
+        self._initial_learning_rate = checkpoint_state_dict['initial_lr']
+        self.training_batch_size = checkpoint_state_dict['batch_size']
 
         ## summarize configuration
         self.data_logger.message('\n'.join((
@@ -48,8 +48,8 @@ class InferenceFramework:
             )).format(
                 loss_fn = '--',
                 optim = '--',
-                lr = initial_lr,
-                batch = batch_size
+                lr = self._initial_learning_rate,
+                batch = self.training_batch_size
             )
         )
 
