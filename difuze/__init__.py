@@ -5,3 +5,4 @@ from . import metrics
 from . import data
 
 from .training import TrainingFramework
+from .inference import InferenceFramework
