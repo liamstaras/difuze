@@ -46,6 +46,23 @@ class DiffusionFramework:
         self.evaluation_metrics = evaluation_metrics
         self.data_logger = data_logger
 
+        ## summarize configuration
+        self.data_logger.message(
+            '''==== DIFFUSION MODEL FRAMEWORK ====
+            ::configuration summary follows::
+            Loss function: {loss_fn}
+            Optimizer: {optim}
+            Learning rate: {lr}
+            Batch size: {batch}
+            ::end configuration summary::
+            '''.format(
+                loss_fn = self.training_loss_function.__class__.__name__,
+                optim = self.optimizer.__class__.__name__,
+                lr = self.optimizer.param_groups[-1]['lr'],
+                batch = self.training_dataloader.batch_size
+            )
+        )
+
 
     def train_single_epoch(self, epoch_number: int, log_every: int) -> torch.Tensor:
         """Train the neural network over a full iteration of the training dataloader
@@ -127,7 +144,7 @@ class DiffusionFramework:
         self.optimizer.step()
         return loss
 
-    @torch.no_grad
+    @torch.no_grad()
     def evaluate_single_epoch(self, epoch_number: int) -> float:
         """Sample from the neural network over a single iteration of the evaluation dataloader, and run metrics
 
