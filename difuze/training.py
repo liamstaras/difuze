@@ -216,6 +216,29 @@ class TrainingFramework:
             (metric.name, metric(output=predicted_gt_image_batch, target=gt_image_batch)) for metric in self.evaluation_metrics
         )
         return predicted_gt_image_batch, metric_results
+    
+    @torch.no_grad()
+    def save_state(self, epoch_number, rms_metrics, best=False):
+        # build a state dict containing all important parts of the framework
+        state_dict = {
+            'epoch': epoch_number,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'loss_scheduler_state_dict': self.loss_scheduler.state_dict(),
+            'metric_scheduler_state_dict': self.metric_scheduler.state_dict(),
+            'rms_metrics': rms_metrics
+        }
+
+        # add the metric scheduler if it exists
+        if self.metric_scheduler is not None:
+            state_dict['metric_scheduler_state_dict'] = self.metric_scheduler.state_dict()
+        
+        # use the logger to write the state dict
+        self.data_logger.state_dict(
+            epoch_number = epoch_number,
+            state_dict = state_dict,
+            best = best
+        )
 
     def main_training_loop(self, log_every: int = 100, eval_every: int = 1, save_every: int = 1) -> None:
         """Run the training and evaluation cycle for the model
@@ -262,7 +285,7 @@ class TrainingFramework:
 
                     # save this model as the new best
                     self.data_logger.message('Saving new best model...')
-                    self.data_logger.model(epoch_number, self.model, best=True)
+                    self.save_state(epoch_number, rms_metrics, best=True)
 
                     # keep track of the fact that we've already saved
                     saved = True
@@ -278,7 +301,7 @@ class TrainingFramework:
                 else:
                     # save the model
                     self.data_logger.message('Saving model...', also_print=True)
-                    self.data_logger.model(epoch_number, self.model, best=False)
+                    self.save_state(epoch_number, rms_metrics, best=False)
                     self.data_logger.message('Resuming training.', also_print=True)
             
             # increase the epoch number

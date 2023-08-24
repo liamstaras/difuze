@@ -117,8 +117,8 @@ class DataLogger:
                 # save the data using the current writer
                 saver(tensor, self.output_base_directory, output_name)
     
-    def model(self, epoch_number: int, model: torch.nn.Module, best: bool = False) -> None:
-        """Save the state_dict of the model to an automatically generated path
+    def state_dict(self, epoch_number: int, state_dict: dict, best: bool = False) -> None:
+        """Save a state_dict to an automatically generated path
 
         epoch_number: the index of the current epoch
         best: whether "_BEST" should be added to the name of the file
@@ -129,4 +129,4 @@ class DataLogger:
         # generate output name
         name = 'model_{}{}'.format(epoch_number, _best)
         # save model to file
-        torch.save(model.state_dict(), os.path.join(self.model_base_directory, name))
+        torch.save(state_dict, os.path.join(self.model_base_directory, name))
