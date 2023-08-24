@@ -45,13 +45,13 @@ class TrainingFramework:
 
         ## summarize configuration
         self.data_logger.message('\n'.join((
-            "==== DIFFUSION MODEL FRAMEWORK ====",
-            ":: configuration summary follows ::",
+            "==== DIFFUSION MODEL TRAINING ====",
+            ":: begin configuration summary",
             " --- loss function: {loss_fn}",
             " --- optimizer: {optim}",
-            " --- learning rate: {lr}",
+            " --- initial learning rate: {lr}",
             " --- batch size: {batch}",
-            "::   end configuration summary   :: "
+            ":: end configuration summary"
             )).format(
                 loss_fn = self.training_loss_function.__class__.__name__,
                 optim = self.optimizer.__class__.__name__,
@@ -59,6 +59,8 @@ class TrainingFramework:
                 batch = self.training_dataloader.batch_size
             )
         )
+
+        self._initial_learning_rate = self.optimizer.param_groups[-1]['lr']
 
 
     def train_single_epoch(self, epoch_number: int, log_every: int) -> torch.Tensor:
@@ -172,7 +174,7 @@ class TrainingFramework:
         mean_metric_results['All_Metrics_RMS'] = rms_metrics
 
         self.data_logger.message('Metric results:', also_print=True)
-        
+
         # step the metric scheduler if present
         if self.metric_scheduler is not None:
             self.metric_scheduler.step(rms_metrics)
@@ -180,13 +182,13 @@ class TrainingFramework:
         # log all metric scores
         for metric_name in mean_metric_results:
             self.data_logger.scalar(
-                series_name = 'Evaluation/Metrics/'+metric_name,
+                series_name = 'Evaluation/Metric/'+metric_name,
                 y_value = mean_metric_results[metric_name],
                 tensorboard_x_value = epoch_number,
                 also_print = True
             )
         
-        # log the FINAL visual from each batch
+        # log the FINAL visual from the FINAL batch
         final_visuals = OrderedDict((
             ('Cond', cond_image_batch[-1].squeeze()),
             ('Pred', predicted_gt_image_batch[-1].squeeze()),
@@ -194,7 +196,7 @@ class TrainingFramework:
         ))
         for visual_name in final_visuals:
             self.data_logger.tensor(
-                series_name = 'Evaluation/Visuals/'+visual_name,
+                series_name = 'Evaluation/Visual/'+visual_name,
                 tensor = final_visuals[visual_name],
                 index = epoch_number,
             )
@@ -230,7 +232,9 @@ class TrainingFramework:
             'optimizer_state_dict': self.optimizer.state_dict(),
             'loss_scheduler_state_dict': self.loss_scheduler.state_dict(),
             'metric_scheduler_state_dict': self.metric_scheduler.state_dict(),
-            'rms_metrics': rms_metrics
+            'rms_metrics': rms_metrics,
+            'initial_lr': self._initial_learning_rate,
+            'batch_size': self.training_dataloader.batch_size
         }
 
         # add the metric scheduler if it exists
