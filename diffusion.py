@@ -47,15 +47,15 @@ class DiffusionFramework:
         self.data_logger = data_logger
 
         ## summarize configuration
-        self.data_logger.message(
-            '''==== DIFFUSION MODEL FRAMEWORK ====
-            ::configuration summary follows::
-            Loss function: {loss_fn}
-            Optimizer: {optim}
-            Learning rate: {lr}
-            Batch size: {batch}
-            ::end configuration summary::
-            '''.format(
+        self.data_logger.message('\n'.join((
+            "==== DIFFUSION MODEL FRAMEWORK ====",
+            ":: configuration summary follows ::",
+            " --- Loss function: {loss_fn}",
+            " --- Optimizer: {optim}",
+            " --- Learning rate: {lr}",
+            " --- Batch size: {batch}",
+            "::   end configuration summary   :: "
+            )).format(
                 loss_fn = self.training_loss_function.__class__.__name__,
                 optim = self.optimizer.__class__.__name__,
                 lr = self.optimizer.param_groups[-1]['lr'],

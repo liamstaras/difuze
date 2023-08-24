@@ -10,7 +10,7 @@ class DataLogger:
             self,
             base_directory_override: str = None,
             use_tensorboard: bool = False,
-            add_timestamps: bool = True,
+            timestamp_format: str = '%Y%m%d_%H%M%S: ',
             visual_function: Callable[[torch.Tensor], torch.Tensor] = lambda tensor: tensor.cpu(),
             save_functions: list[Saver] = []
         ):
@@ -39,27 +39,38 @@ class DataLogger:
             self.summary_writer = None
         
         ## other parameters
-        self.add_timestamps = add_timestamps
+        self.timestamp_format = timestamp_format
         self.visual_function = visual_function
         self.save_functions = save_functions
     
-    def message(self, line: str, also_print: bool = True) -> None:
+    def message(self, lines: str, also_print: bool = True) -> None:
         """Add a line to the log file
 
-        line: the text to add
+        lines: the text to add
         date_time: whether the date and time should be included in the log message
         """
 
-        # add a timestamp if required
-        if self.add_timestamps:
-            line = datetime.now().strftime('%Y%m%d_%H%M%S: ') + line
+        # split lines
+        lines_list = lines.split('\n')
 
+        # add a timestamp
+        time_stamp = datetime.now().strftime(self.timestamp_format)
+
+        # write the first line with a timestamp
+        self._write_line(time_stamp+lines_list[0], self.log_path, also_print)
+
+        # write the remaining lines without timestamps
+        for line in lines_list[1:]:
+            self._write_line(' '*(len(time_stamp)-3)+'=> '+line, self.log_path, also_print)
+
+        
+    @staticmethod
+    def _write_line(line: str, log_path: str, also_print: bool) -> None:
         # print the output if desired
         if also_print:
             print(line)
-
         # write the output to the logfile
-        with open(self.log_path, 'a') as log_file:
+        with open(log_path, 'a') as log_file:
             log_file.write(line+'\n')
     
     def scalar(
