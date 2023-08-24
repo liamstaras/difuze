@@ -24,20 +24,22 @@ class DiffusionFramework:
         device: str,
         model: DiffusionModel,
         optimizer: torch.optim.Optimizer,
-        scheduler,
+        loss_scheduler,
         training_dataloader: DataLoader,
         training_noise_schedule: NoiseSchedule,
         training_loss_function: torch.nn.modules.loss._Loss,
         evaluation_dataloader: DataLoader,
         inference_noise_schedule: NoiseSchedule,
         evaluation_metrics: list[TorchMetric],
-        data_logger: DataLogger
+        data_logger: DataLogger,
+
+        metric_scheduler = None
     ):
         ## properties specified as arguments
         self.device = device
         self.model = model.to(device)
         self.optimizer = optimizer
-        self.scheduler = scheduler
+        self.loss_scheduler = loss_scheduler
         self.training_dataloader = training_dataloader
         self.training_noise_schedule = training_noise_schedule
         self.training_loss_function = training_loss_function
@@ -46,14 +48,16 @@ class DiffusionFramework:
         self.evaluation_metrics = evaluation_metrics
         self.data_logger = data_logger
 
+        self.metric_scheduler = metric_scheduler
+
         ## summarize configuration
         self.data_logger.message('\n'.join((
             "==== DIFFUSION MODEL FRAMEWORK ====",
             ":: configuration summary follows ::",
-            " --- Loss function: {loss_fn}",
-            " --- Optimizer: {optim}",
-            " --- Learning rate: {lr}",
-            " --- Batch size: {batch}",
+            " --- loss function: {loss_fn}",
+            " --- optimizer: {optim}",
+            " --- learning rate: {lr}",
+            " --- batch size: {batch}",
             "::   end configuration summary   :: "
             )).format(
                 loss_fn = self.training_loss_function.__class__.__name__,
@@ -275,6 +279,10 @@ class DiffusionFramework:
                 # actually run evaluation, storing the RMS of all the metrics
                 rms_metrics = self.evaluate_single_epoch(epoch_number)
 
+                # step the metric scheduler if present
+                if self.metric_scheduler is not None:
+                    self.metric_scheduler.step(rms_metrics)
+
                 # see if this is the best epoch
                 if rms_metrics <= best_rms_metrics:
                     # notify the user
@@ -307,4 +315,4 @@ class DiffusionFramework:
             # increase the epoch number
             epoch_number += 1
             # consult the scheduler for learning rate change
-            self.scheduler.step()
+            self.loss_scheduler.step()

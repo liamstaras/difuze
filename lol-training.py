@@ -60,9 +60,16 @@ optimizer = torch.optim.Adam(
     weight_decay=0
 )
 
-scheduler = torch.optim.lr_scheduler.ExponentialLR(
+loss_scheduler = torch.optim.lr_scheduler.ExponentialLR(
     optimizer=optimizer,
     gamma=LEARNING_RATE_GAMMA_DECAY
+)
+
+metric_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer=optimizer,
+    factor=0.5,
+    patience=3,
+    threshold=0.05
 )
 
 # make noise schedules
@@ -127,14 +134,16 @@ framework = DiffusionFramework(
     device=device,
     model=model,
     optimizer=optimizer,
-    scheduler=scheduler,
+    loss_scheduler=loss_scheduler,
     training_dataloader=training_dataloader,
     training_noise_schedule=training_noise_schedule,
     training_loss_function=training_loss_function,
     evaluation_dataloader=evaluation_dataloader,
     inference_noise_schedule=inference_noise_schedule,
     evaluation_metrics=evaluation_metrics,
-    data_logger=data_logger
+    data_logger=data_logger,
+
+    metric_scheduler=metric_scheduler
 )
 
 framework.main_training_loop()
