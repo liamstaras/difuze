@@ -28,10 +28,6 @@ class DataLogger:
         self.output_base_directory = os.path.join(self.base_directory, 'output')
         self.model_base_directory = os.path.join(self.base_directory, 'models')
 
-        os.makedirs(self.base_directory, exist_ok=True)
-        os.makedirs(self.output_base_directory, exist_ok=True)
-        os.makedirs(self.model_base_directory, exist_ok=True)
-
         ## initialize Tensorboard if required
         if use_tensorboard:
             from torch.utils.tensorboard.writer import SummaryWriter
@@ -51,6 +47,9 @@ class DataLogger:
         lines: the text to add
         date_time: whether the date and time should be included in the log message
         """
+
+        # make base directory if needed
+        os.makedirs(self.base_directory, exist_ok=True)
 
         # split lines
         lines_list = lines.split('\n')
@@ -109,6 +108,9 @@ class DataLogger:
             self.summary_writer.add_image(series_name, self.visual_function(tensor), index)
         
         if save_locally:
+            # make the output directory if it doesn't already exist
+            os.makedirs(self.output_base_directory, exist_ok=True)
+
             # build the path from index and series name
             output_name = os.path.normpath(series_name+filename_format.format(index))
 
@@ -123,6 +125,9 @@ class DataLogger:
         epoch_number: the index of the current epoch
         best: whether "_BEST" should be added to the name of the file
         """
+
+        # make the model directory if it doesn't already exist
+        os.makedirs(self.model_base_directory, exist_ok=True)
 
         # add "_BEST" if this was the best epoch so far
         _best = '_BEST' if best else ''
