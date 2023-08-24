@@ -172,6 +172,10 @@ class TrainingFramework:
         mean_metric_results['All_Metrics_RMS'] = rms_metrics
 
         self.data_logger.message('Metric results:', also_print=True)
+        
+        # step the metric scheduler if present
+        if self.metric_scheduler is not None:
+            self.metric_scheduler.step(rms_metrics)
 
         # log all metric scores
         for metric_name in mean_metric_results:
@@ -270,10 +274,6 @@ class TrainingFramework:
 
                 # actually run evaluation, storing the RMS of all the metrics
                 rms_metrics = self.evaluate_single_epoch(epoch_number)
-
-                # step the metric scheduler if present
-                if self.metric_scheduler is not None:
-                    self.metric_scheduler.step(rms_metrics)
 
                 # see if this is the best epoch
                 if rms_metrics <= best_rms_metrics:
