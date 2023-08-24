@@ -63,6 +63,7 @@ class InferenceFramework:
             
             # log the each visual from the batch
             for j in range(len(predicted_gt_image_batch)):
+                actual_index = i*self.inference_dataloader.batch_size + j
                 visuals = OrderedDict((
                     ('Cond', cond_image_batch[j].squeeze()),
                     ('Pred', predicted_gt_image_batch[j].squeeze()),
@@ -72,7 +73,7 @@ class InferenceFramework:
                     self.data_logger.tensor(
                         series_name = 'Inference/Output/'+visual_name,
                         tensor = visuals[visual_name],
-                        index = i
+                        index = actual_index
                     )
         
   
