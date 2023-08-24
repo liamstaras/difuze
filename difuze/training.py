@@ -27,7 +27,7 @@ class TrainingFramework:
         evaluation_metrics: list[metrics.TorchMetric],
         data_logger: log.DataLogger,
 
-        state_dict_to_load: dict | None = None,
+        state_dict_to_load: dict = None,
         metric_scheduler = None
     ):
         ## properties specified as arguments

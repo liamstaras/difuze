@@ -10,7 +10,7 @@ from . import data
 class DataLogger:
     def __init__(
             self,
-            base_directory_override: str | None = None,
+            base_directory_override: str = None,
             use_tensorboard: bool = False,
             timestamp_format: str = '%Y%m%d_%H%M%S: ',
             visual_function: Callable[[torch.Tensor], torch.Tensor] = lambda tensor: tensor.cpu(),
@@ -78,9 +78,9 @@ class DataLogger:
     def scalar(
             self,
             series_name: str,
-            y_value: torch.Tensor | float,
+            y_value: torch.Tensor,
             status_message: str = '',
-            tensorboard_x_value: torch.Tensor | int | None = None,
+            tensorboard_x_value: torch.Tensor = None,
             also_print: bool = False
         ) -> None:
         """Add a scalar to both the log file and Tensorboard, and optionally print the output
