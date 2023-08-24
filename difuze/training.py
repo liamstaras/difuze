@@ -1,4 +1,5 @@
 import torch
+import torch.utils.data
 import numpy as np
 import random
 import tqdm
@@ -231,7 +232,6 @@ class TrainingFramework:
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'loss_scheduler_state_dict': self.loss_scheduler.state_dict(),
-            'metric_scheduler_state_dict': self.metric_scheduler.state_dict(),
             'rms_metrics': rms_metrics,
             'initial_lr': self._initial_learning_rate,
             'batch_size': self.training_dataloader.batch_size

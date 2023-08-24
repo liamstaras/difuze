@@ -1,4 +1,5 @@
 import torch
+import torch.utils.data
 import numpy as np
 import random
 import tqdm
@@ -79,7 +80,7 @@ class InferenceFramework:
         
   
     @torch.no_grad()
-    def infer_one_batch(self, cond_image_batch: torch.Tensor, mask: torch.BoolTensor) -> tuple[torch.Tensor, OrderedDict[str, tuple[float]]]:
+    def infer_one_batch(self, cond_image_batch: torch.Tensor, mask: torch.BoolTensor) -> torch.Tensor:
         """Sample from the neural network over a single batch of images, and run metrics
 
         cond_image_batch: the batch of conditioned images
