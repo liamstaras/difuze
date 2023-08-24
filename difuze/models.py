@@ -1,8 +1,13 @@
-from .guided_diffusion.unet import UNet
-from diffusion import DiffusionModel
 import torch
 
-class PaletteModel(UNet, DiffusionModel):
+from . import networks
+
+# define a placeholder class for diffusion models, demonstrating the necessity of a refinement_step method
+class Diffusion(torch.nn.Module):
+    def refinement_step(self, predicted_gt_image_batch_t, cond_image_batch, alpha_t, gamma_t):
+        raise AttributeError('Must define a refinement step!')
+
+class Palette(networks.guided_diffusion.UNet, Diffusion):
     def forward(self, cond_image_batch: torch.Tensor, noisy_image_batch: torch.Tensor, gamma: torch.Tensor):
         noise_prediction = super().forward(torch.cat([cond_image_batch, noisy_image_batch], dim=1), gamma)
         return noise_prediction

@@ -1,10 +1,9 @@
-import torch.utils.data as data
 import numpy as np
 import os
 import torch
 from collections.abc import Callable
 
-class NpyDataset(data.Dataset):
+class NpyDataset(torch.utils.data.Dataset):
     def __init__(self, data_path: str, gt_index: int, cond_index: int, mask_index=None, start_index=0., stop_index=1.):
         self._data = np.load(data_path, mmap_mode='r')
         self._gt_index = gt_index

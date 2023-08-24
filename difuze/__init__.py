@@ -1,37 +1,31 @@
 import torch
+import numpy as np
 import random
 import tqdm
-from data import Saver
-from log import DataLogger
-from support import NoiseSchedule, TorchMetric
-from torch.utils.data import DataLoader
-from collections import OrderedDict
-from collections.abc import Callable
-from datetime import datetime
-import numpy as np
-from pprint import pformat
-import os
 
-# define a placeholder class for diffusion models, demonstrating the necessity of a refinement_step method
-class DiffusionModel(torch.nn.Module):
-    def refinement_step(self, predicted_gt_image_batch_t, cond_image_batch, alpha_t, gamma_t):
-        raise AttributeError('Must define a refinement step!')
+from collections import OrderedDict
+
+from . import log
+from . import support
+from . import models
+from . import metrics
+from . import data
 
 # a class containing the main algorithms for any diffusion model
 class DiffusionFramework:
     def __init__(
         self,
         device: str,
-        model: DiffusionModel,
+        model: models.Diffusion,
         optimizer: torch.optim.Optimizer,
         loss_scheduler,
-        training_dataloader: DataLoader,
-        training_noise_schedule: NoiseSchedule,
+        training_dataloader: torch.utils.data.DataLoader,
+        training_noise_schedule: support.NoiseSchedule,
         training_loss_function: torch.nn.modules.loss._Loss,
-        evaluation_dataloader: DataLoader,
-        inference_noise_schedule: NoiseSchedule,
-        evaluation_metrics: list[TorchMetric],
-        data_logger: DataLogger,
+        evaluation_dataloader: torch.utils.data.DataLoader,
+        inference_noise_schedule: support.NoiseSchedule,
+        evaluation_metrics: list[metrics.TorchMetric],
+        data_logger: log.DataLogger,
 
         metric_scheduler = None
     ):

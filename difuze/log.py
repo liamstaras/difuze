@@ -1,9 +1,11 @@
+import torch
 import os
+
 from datetime import datetime
 from socket import gethostname
 from collections.abc import Callable
-from data import Saver
-import torch
+
+from . import data
 
 class DataLogger:
     def __init__(
@@ -12,7 +14,7 @@ class DataLogger:
             use_tensorboard: bool = False,
             timestamp_format: str = '%Y%m%d_%H%M%S: ',
             visual_function: Callable[[torch.Tensor], torch.Tensor] = lambda tensor: tensor.cpu(),
-            save_functions: list[Saver] = []
+            save_functions: list[data.Saver] = []
         ):
         ## establish base path
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
