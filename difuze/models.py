@@ -1,11 +1,39 @@
 import torch
+import tqdm
 
 from . import networks
+from . import support
 
 # define a placeholder class for diffusion models, demonstrating the necessity of a refinement_step method
 class Diffusion(torch.nn.Module):
+    @torch.no_grad()
     def refinement_step(self, predicted_gt_image_batch_t, cond_image_batch, alpha_t, gamma_t):
         raise AttributeError('Must define a refinement step!')
+    
+    @torch.no_grad()
+    def infer_one_batch(self, cond_image_batch: torch.Tensor, mask: torch.BoolTensor, inference_noise_schedule: support.NoiseSchedule) -> torch.Tensor:
+        """Sample from the neural network over a single batch of images
+
+        cond_image_batch: the batch of conditioned images
+        mask: a boolean array of pixels to ignore in predictions (NOT YET IMPLEMENTED)
+        """
+
+        # start with a noise field, inserting the cond_image_batch where the mask is present
+        predicted_gt_image_batch = torch.randn_like(cond_image_batch)*mask + cond_image_batch*(1-mask)
+        # iteratively apply the refinement step to denoise and renoise the image
+        # note: t runs from T to 1
+        for i in tqdm.tqdm(range(len(inference_noise_schedule))):
+            # calculate the current t value from i
+            t = len(inference_noise_schedule) - (i+1)
+            # actually predict an image, and apply the mask
+            predicted_gt_image_batch = self.refinement_step(
+                predicted_gt_image_batch_t=predicted_gt_image_batch,
+                cond_image_batch=cond_image_batch,
+                alpha_t=torch.tensor(inference_noise_schedule.alphas[t], device=cond_image_batch.device),
+                gamma_t=torch.tensor(inference_noise_schedule.gammas[t], device=cond_image_batch.device)
+            )*mask + cond_image_batch*(1-mask) # apply masking
+        return predicted_gt_image_batch
+
 
 class Palette(networks.guided_diffusion.UNet, Diffusion):
     def forward(self, cond_image_batch: torch.Tensor, noisy_image_batch: torch.Tensor, gamma: torch.Tensor):

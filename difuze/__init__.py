@@ -211,36 +211,12 @@ class DiffusionFramework:
         # place the model into evaluation mode
         self.model.eval()
         # carry out inference to predict the ground truth
-        predicted_gt_image_batch = self.infer_one_batch(cond_image_batch, mask)
+        predicted_gt_image_batch = self.model.infer_one_batch(cond_image_batch, mask, self.inference_noise_schedule)
         # run evaluation metrics on the image
         metric_results = OrderedDict(
             (metric.name, metric(output=predicted_gt_image_batch, target=gt_image_batch)) for metric in self.evaluation_metrics
         )
         return predicted_gt_image_batch, metric_results
-
-    @torch.no_grad()
-    def infer_one_batch(self, cond_image_batch: torch.Tensor, mask: torch.BoolTensor) -> torch.Tensor:
-        """Sample from the neural network over a single batch of images
-
-        cond_image_batch: the batch of conditioned images
-        mask: a boolean array of pixels to ignore in predictions (NOT YET IMPLEMENTED)
-        """
-
-        # start with a noise field, inserting the cond_image_batch where the mask is present
-        predicted_gt_image_batch = torch.randn_like(cond_image_batch)*mask + cond_image_batch*(1-mask)
-        # iteratively apply the refinement step to denoise and renoise the image
-        # note: t runs from T to 1
-        for i in tqdm.tqdm(range(len(self.inference_noise_schedule))):
-            # calculate the current t value from i
-            t = len(self.inference_noise_schedule) - (i+1)
-            # actually predict an image, and apply the mask
-            predicted_gt_image_batch = self.model.refinement_step(
-                predicted_gt_image_batch_t=predicted_gt_image_batch,
-                cond_image_batch=cond_image_batch,
-                alpha_t=torch.tensor(self.inference_noise_schedule.alphas[t], device=self.device),
-                gamma_t=torch.tensor(self.inference_noise_schedule.gammas[t], device=self.device)
-            )*mask + cond_image_batch*(1-mask) # apply masking
-        return predicted_gt_image_batch
 
     def main_training_loop(self, log_every: int = 100, eval_every: int = 1, save_every: int = 1) -> None:
         """Run the training and evaluation cycle for the model
