@@ -97,7 +97,7 @@ class DataLogger:
         
         if save_locally:
             # build the path from index and series name
-            output_name = os.path.join(series_name, filename_format.format(index))
+            output_name = os.path.normpath(series_name+filename_format.format(index))
 
             # loop through each writer
             for saver in self.save_functions:
