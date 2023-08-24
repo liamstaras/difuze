@@ -11,8 +11,8 @@ from . import models
 from . import metrics
 from . import data
 
-# a class containing the main algorithms for any diffusion model
-class DiffusionFramework:
+# a class containing the main algorithms for training any diffusion model
+class TrainingFramework:
     def __init__(
         self,
         device: str,
