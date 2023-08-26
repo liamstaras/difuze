@@ -12,12 +12,12 @@ class DataLogger:
             self,
             base_directory_override: str = None,
             use_tensorboard: bool = False,
-            timestamp_format: str = '%Y%m%d_%H%M%S: ',
+            timestamp_format: str = '%Y-%m-%d_%H-%M-%S',
             visual_function: Callable[[torch.Tensor], torch.Tensor] = lambda tensor: tensor.cpu(),
             save_functions: list[data.Saver] = []
         ):
         ## establish base path
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        timestamp = datetime.now().strftime(timestamp_format)
         if base_directory_override is None:
             self.base_directory = os.path.join('runs', timestamp+'_'+gethostname())
         else:

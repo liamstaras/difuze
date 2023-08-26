@@ -5,6 +5,8 @@ import random
 import tqdm
 
 from collections import OrderedDict
+from datetime import datetime
+from socket import gethostname
 
 from . import log
 from . import support
@@ -21,10 +23,10 @@ class TrainingFramework:
         loss_scheduler,
         training_dataloader: torch.utils.data.DataLoader,
         training_noise_schedule: support.NoiseSchedule,
-        training_loss_function: torch.nn.modules.loss._Loss,
-        evaluation_dataloader: torch.utils.data.DataLoader,
+        loss_function: torch.nn.modules.loss._Loss,
+        validation_dataloader: torch.utils.data.DataLoader,
         inference_noise_schedule: support.NoiseSchedule,
-        evaluation_metrics: list[metrics.TorchMetric],
+        validation_metrics: list[metrics.TorchMetric],
         data_logger: log.DataLogger,
 
         state_dict_to_load: dict = None,
@@ -37,10 +39,10 @@ class TrainingFramework:
         self.loss_scheduler = loss_scheduler
         self.training_dataloader = training_dataloader
         self.training_noise_schedule = training_noise_schedule
-        self.training_loss_function = training_loss_function
-        self.evaluation_dataloader = evaluation_dataloader
+        self.loss_function = loss_function
+        self.validation_dataloader = validation_dataloader
         self.inference_noise_schedule = inference_noise_schedule
-        self.evaluation_metrics = evaluation_metrics
+        self.validation_metrics = validation_metrics
         self.data_logger = data_logger
 
         self.metric_scheduler = metric_scheduler
@@ -50,6 +52,7 @@ class TrainingFramework:
         ## summarize configuration
         self.data_logger.message('\n'.join((
             "==== DIFFUSION MODEL TRAINING ====",
+            "hostname: {hostname}",
             ":: begin configuration summary",
             " --- loss function: {loss_fn}",
             " --- optimizer: {optim}",
@@ -57,7 +60,8 @@ class TrainingFramework:
             " --- batch size: {batch}",
             ":: end configuration summary"
             )).format(
-                loss_fn = self.training_loss_function.__class__.__name__,
+                hostname = gethostname(),
+                loss_fn = self.loss_function.__class__.__name__,
                 optim = self.optimizer.__class__.__name__,
                 lr = self.optimizer.param_groups[-1]['lr'],
                 batch = self.training_dataloader.batch_size
@@ -112,7 +116,7 @@ class TrainingFramework:
 
                 # write to the log
                 self.data_logger.scalar(
-                    series_name = 'Train/'+self.training_loss_function.__class__.__name__,
+                    series_name = 'Train/'+self.loss_function.__class__.__name__,
                     y_value = mean_loss,
                     status_message = 'Epoch {: >3d}, iteration {: >6d}. Current learning rate is {:.2e}'.format(
                         self.epoch_number,
@@ -151,7 +155,7 @@ class TrainingFramework:
         # return predict the noise field using the nn
         predicted_noise_field = self.model(cond_image_batch, noisy_image_batch, gamma)
         # calculate loss
-        loss = self.training_loss_function(noise_field, predicted_noise_field)
+        loss = self.loss_function(noise_field, predicted_noise_field)
         loss.backward()
         # adjust learning weights
         self.optimizer.step()
@@ -159,19 +163,19 @@ class TrainingFramework:
 
     @torch.no_grad()
     def evaluate_single_epoch(self) -> float:
-        """Sample from the neural network over a single iteration of the evaluation dataloader, and run metrics
+        """Sample from the neural network over a single iteration of the validation dataloader, and run metrics
 
         epoch_number: the index of the current epoch, for logging purposes
         """
-        # inform the user that evaluation is about to commence
-        self.data_logger.message('This is an evaluation epoch. Beginning evalution...', also_print=True)
+        # inform the user that validation is about to commence
+        self.data_logger.message('This is an validation epoch. Beginning evalution...', also_print=True)
         
         # make ordered dict to store lists of metric results
         all_metric_results = OrderedDict(
-            (metric.name, []) for metric in self.evaluation_metrics
+            (metric.name, []) for metric in self.validation_metrics
         )
-        # loop over the evaluation data, showing tqdm progress bar and tracking the index
-        for i, data in enumerate(tqdm.tqdm(self.evaluation_dataloader)):
+        # loop over the validation data, showing tqdm progress bar and tracking the index
+        for i, data in enumerate(tqdm.tqdm(self.validation_dataloader)):
             gt_image_batch, cond_image_batch, mask, actual_index = data
             # get the current metric results
             predicted_gt_image_batch, metric_results = self.evaluate_one_batch(gt_image_batch.to(self.device), cond_image_batch.to(self.device), mask.to(self.device))
@@ -199,7 +203,7 @@ class TrainingFramework:
         # log all metric scores
         for metric_name in mean_metric_results:
             self.data_logger.scalar(
-                series_name = 'Evaluation/Metric/'+metric_name,
+                series_name = 'validation/Metric/'+metric_name,
                 y_value = mean_metric_results[metric_name],
                 tensorboard_x_value = self.epoch_number,
                 also_print = True
@@ -213,7 +217,7 @@ class TrainingFramework:
         ))
         for visual_name in final_visuals:
             self.data_logger.tensor(
-                series_name = 'Evaluation/Visual/',
+                series_name = 'validation/Visual/',
                 tag = visual_name,
                 tensor = final_visuals[visual_name],
                 index = self.epoch_number,
@@ -231,13 +235,13 @@ class TrainingFramework:
         mask: a boolean array of pixels to ignore in predictions (NOT YET IMPLEMENTED)
         """
         
-        # place the model into evaluation mode
+        # place the model into validation mode
         self.model.eval()
         # carry out inference to predict the ground truth
         predicted_gt_image_batch = self.model.infer_one_batch(cond_image_batch, mask, self.inference_noise_schedule)
-        # run evaluation metrics on the image
+        # run validation metrics on the image
         metric_results = OrderedDict(
-            (metric.name, metric(output=predicted_gt_image_batch, target=gt_image_batch)) for metric in self.evaluation_metrics
+            (metric.name, metric(output=predicted_gt_image_batch, target=gt_image_batch)) for metric in self.validation_metrics
         )
         return predicted_gt_image_batch, metric_results
     
@@ -245,14 +249,20 @@ class TrainingFramework:
     def state(self) -> dict:
         # build a state dict containing all important parts of the framework
         state_dict = {
+            'save_hostname': gethostname(),
+            'save_timestamp': datetime.now().strftime('%Y-%m-%d_%H-%M-%S'),
             'epoch_number': self.epoch_number,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'loss_scheduler_state_dict': self.loss_scheduler.state_dict(),
             'recent_rms_metrics': self.recent_rms_metrics,
             'best_rms_metrics': self.best_rms_metrics,
-            'initial_lr': self._initial_learning_rate,
-            'batch_size': self.training_dataloader.batch_size
+            'configuration': {
+                'batch_size': self.training_dataloader.batch_size,
+                'initial_lr': self._initial_learning_rate,
+                'optimizer': self.optimizer.__class__.__name__,
+                'loss_function': self.loss_function.__class__.__name__
+            }
         }
 
         # add the metric scheduler if it exists
@@ -269,15 +279,15 @@ class TrainingFramework:
         self.optimizer.load_state_dict(state_dict['optimizer_state_dict'])
         self.loss_scheduler.load_state_dict(state_dict['loss_scheduler_state_dict'])
         self.recent_rms_metrics = state_dict['recent_rms_metrics']
-        self._initial_learning_rate = state_dict['initial_lr']  
+        self._initial_learning_rate = state_dict['configuration']['initial_lr']
     
 
     def main_training_loop(self, log_every: int = 100, eval_every: int = 1, save_every: int = 1) -> None:
-        """Run the training and evaluation cycle for the model
+        """Run the training and validation cycle for the model
 
         log_every: the number of training iterations between each logging event
-        eval_every: the number of epochs between each evaluation event
-        save_every: the number of epochs between each forced save event; note that a best RMS evaluation score triggers saving anyway
+        eval_every: the number of epochs between each validation event
+        save_every: the number of epochs between each forced save event; note that a best RMS validation score triggers saving anyway
         """
 
         # keep track of the epoch number and the best metric score
@@ -292,9 +302,9 @@ class TrainingFramework:
             # keep track of whether we have saved the model this epoch
             saved = False
 
-            # check if we are at an evaluation epoch
+            # check if we are at an validation epoch
             if self.epoch_number % eval_every == 0:
-                # actually run evaluation, storing the RMS of all the metrics
+                # actually run validation, storing the RMS of all the metrics
                 self.recent_rms_metrics = self.evaluate_single_epoch()
 
                 # see if this is the best epoch

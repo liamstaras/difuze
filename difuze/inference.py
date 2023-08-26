@@ -27,26 +27,36 @@ class InferenceFramework:
         self.data_logger = data_logger
 
         ## load states from checkpoint
+        training_hostname = checkpoint_state_dict['save_hostname']
+        training_timestamp = checkpoint_state_dict['save_timestamp']
         self.epoch_number = checkpoint_state_dict['epoch_number']
         self.model.load_state_dict(checkpoint_state_dict['model_state_dict'])
         self.recent_rms_metrics = checkpoint_state_dict['recent_rms_metrics']
-        self._initial_learning_rate = checkpoint_state_dict['initial_lr']
-        self.training_batch_size = checkpoint_state_dict['batch_size']
+        self.configuration = checkpoint_state_dict['configuration']
 
         ## summarize configuration
         self.data_logger.message('\n'.join((
             "==== DIFFUSION MODEL INFERENCE ====",
             ":: begin checkpoint configuration summary",
+            " --- hostname: {hostname}",
+            " --- save timestamp: {timestamp}",
             " --- loss function: {loss_fn}",
             " --- optimizer: {optim}",
             " --- initial learning rate: {lr}",
-            " --- batch size: {batch}",
-            ":: end checkpoint configuration summary"
+            " --- (training) batch size: {train_batch}",
+            ":: end checkpoint configuration summary",
+            ":: begin inference configuration summary",
+            " --- (inference) batch size: {inf_batch}",
+            " --- refinement steps: {ref_steps}"
             )).format(
-                loss_fn = '--',
-                optim = '--',
-                lr = self._initial_learning_rate,
-                batch = self.training_batch_size
+                hostname = training_hostname,
+                hostname = training_timestamp,
+                loss_fn = self.configuration['loss_function'],
+                optim = self.configuration['optimizer'],
+                lr = self.configuration['initial_lr'],
+                train_batch = self.configuration['batch_size'],
+                inf_batch = self.inference_dataloader.batch_size,
+                ref_steps = len(self.inference_noise_schedule)
             )
         )
 
@@ -85,7 +95,7 @@ class InferenceFramework:
         mask: a boolean array of pixels to ignore in predictions (NOT YET IMPLEMENTED)
         """
         
-        # place the model into evaluation mode
+        # place the model into validation mode
         self.model.eval()
         # carry out inference to predict the ground truth
         predicted_gt_image_batch = self.model.infer_one_batch(cond_image_batch, mask, self.inference_noise_schedule)
