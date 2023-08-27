@@ -26,7 +26,7 @@ class TrainingFramework:
         loss_function: torch.nn.modules.loss._Loss,
         validation_dataloader: torch.utils.data.DataLoader,
         inference_noise_schedule: support.NoiseSchedule,
-        validation_metrics: list[metrics.TorchMetric],
+        validation_metrics: list[metrics.Metric],
         data_logger: log.DataLogger,
 
         state_dict_to_load: dict = None,
@@ -241,7 +241,13 @@ class TrainingFramework:
         predicted_gt_image_batch = self.model.infer_one_batch(cond_image_batch, mask, self.inference_noise_schedule)
         # run validation metrics on the image
         metric_results = OrderedDict(
-            (metric.name, metric(output=predicted_gt_image_batch, target=gt_image_batch)) for metric in self.validation_metrics
+            (
+                metric.name,
+                [metric(
+                    predicted_gt_image=predicted_gt_image_batch[i].squeeze(),
+                    gt_image=gt_image_batch[i].squeeze()
+                ) for i in range(len(gt_image_batch))]
+            ) for metric in self.validation_metrics
         )
         return predicted_gt_image_batch, metric_results
     
