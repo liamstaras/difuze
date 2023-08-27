@@ -50,7 +50,7 @@ class InferenceFramework:
             " --- refinement steps: {ref_steps}"
             )).format(
                 hostname = training_hostname,
-                hostname = training_timestamp,
+                timestamp = training_timestamp,
                 loss_fn = self.configuration['loss_function'],
                 optim = self.configuration['optimizer'],
                 lr = self.configuration['initial_lr'],
